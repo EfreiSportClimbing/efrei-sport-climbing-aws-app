@@ -1,21 +1,24 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { sign } from 'tweetnacl';
+import { DiscordInteraction, DiscordInteractionData, DiscordInteractionResponse } from './type';
 
-const PUBLIC_KEY: string = process.env.PUBLIC_KEY || '';
+const PUBLIC_KEY: string = process.env.PUBLIC_KEY as string;
 const PING_PONG: APIGatewayProxyResult = { statusCode: 200, body: '{"type":1}' };
 const UNAUTHORIZED: APIGatewayProxyResult = { statusCode: 401, body: '[UNAUTHORIZED] invalid request signature' };
+const DUMMY_RESPONSE: APIGatewayProxyResult = { statusCode: 200, body: '{"type":3,"data":{"content":"BEEP BOOP"}}' };
 const RESPONSE_TYPE = {
     PONG: 1,
     ACK_NO_SOURCE: 2,
     MESSAGE_NO_SOURCE: 3,
     MESSAGE_WITH_SOURCE: 4,
     ACK_WITH_SOURCE: 5,
+    UPDATE_MESSAGE: 7,
 };
 
 function verify_signature(event: APIGatewayProxyEvent): void {
-    const signature: string = event.headers['x-signature-ed25519'] || '';
-    const timestamp: string = event.headers['x-signature-timestamp'] || '';
-    const strBody: string = event.body || '';
+    const signature: string = event.headers['x-signature-ed25519'] as string;
+    const timestamp: string = event.headers['x-signature-timestamp'] as string;
+    const strBody: string = event.body as string;
 
     if (
         !sign.detached.verify(
@@ -28,12 +31,43 @@ function verify_signature(event: APIGatewayProxyEvent): void {
     }
 }
 
-function ping_pong(event: APIGatewayProxyEvent): boolean {
-    const body = JSON.parse(event.body || '{}');
+function ping_pong(body: any): boolean {
     if (body?.type === 1) {
         return true;
     }
     return false;
+}
+
+function command_handler(body: DiscordInteraction): APIGatewayProxyResult | void {
+    const { data, member } = body;
+    const { name } = data as DiscordInteractionData;
+
+    if (name === 'foo') {
+        const response: DiscordInteractionResponse = {
+            type: RESPONSE_TYPE.MESSAGE_WITH_SOURCE,
+            data: {
+                embeds: [
+                    {
+                        title: 'bar',
+                        description: 'response from foo command',
+                        author: {
+                            name: member?.user.username,
+                            icon_url: 'https://cdn.discordapp.com/embed/avatars/' + member?.user.avatar + '.png',
+                            url: 'https://discord.com/users/' + member?.user.id,
+                        },
+                    },
+                ],
+            },
+            options: {
+                ephemeral: true,
+            },
+        };
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify(response),
+        };
+    }
 }
 
 /**
@@ -49,28 +83,18 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
     // debug log
     console.log('event', event);
 
-    console.log('PUBLIC_KEY', PUBLIC_KEY);
-
     try {
         verify_signature(event);
     } catch (err) {
         console.log('UNAUTHORIZED');
         return UNAUTHORIZED;
     }
-
-    if (ping_pong(event)) {
+    const body = JSON.parse(event.body || '{}') as DiscordInteraction;
+    if (ping_pong(body)) {
         console.log('PING PONG');
         return PING_PONG;
     }
 
     // dummy response
-    return {
-        statusCode: 200,
-        body: JSON.stringify({
-            type: RESPONSE_TYPE.MESSAGE_NO_SOURCE,
-            data: {
-                content: 'BEEP BOOP',
-            },
-        }),
-    };
+    return command_handler(body) || DUMMY_RESPONSE;
 };

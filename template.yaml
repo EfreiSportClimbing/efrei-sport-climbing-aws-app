@@ -9,6 +9,7 @@ Description: >
 Globals:
   Function:
     Timeout: 3
+    MemorySize: 256
     Tracing: Active
   Api:
     TracingEnabled: true
