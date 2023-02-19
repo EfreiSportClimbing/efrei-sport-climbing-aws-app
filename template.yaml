@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  efrei-sport-climbing-aws-app
+
+  Sample SAM Template for efrei-sport-climbing-aws-app
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 3
+    Tracing: Active
+  Api:
+    TracingEnabled: true
+
+Resources:
+  DiscordEventHandlerFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: discord_event_handler/
+      Handler: app.lambdaHandler
+      Runtime: nodejs18.x
+      Architectures:
+      - arm64
+      Events:
+        Discord:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /discord-event-handler
+            Method: post
+      Environment:
+        Variables:
+          PUBLIC_KEY: f89f9764c9ce8ce28b688306bf9c996a686ce1de04e804091d52d602016fc77a
+    Metadata: # Manage esbuild properties
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        EntryPoints:
+        - app.ts
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  DiscordEventHandlerApi:
+    Description: API Gateway endpoint URL for Prod stage for Discord Event Handler function
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/discord-event-handler/"
+  DiscordEventHandlerFunction:
+    Description: Discord Event Handler Lambda Function ARN
+    Value: !GetAtt DiscordEventHandlerFunction.Arn
+  DiscordEventHandlerFunctionIamRole:
+    Description: Implicit IAM Role created for Discord Event Handler function
+    Value: !GetAtt DiscordEventHandlerFunctionRole.Arn
