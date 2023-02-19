@@ -53,7 +53,7 @@ export type DiscordMessage = {
     role_subscription_data?: string;
 };
 
-export type DiscordInteractionData = {
+export type DiscordApplicationCommandData = {
     id: string;
     name: string;
     type: number;
@@ -65,11 +65,17 @@ export type DiscordInteractionData = {
     channel_id?: string;
 };
 
+export type DiscordMessageComponentData = {
+    custom_id: string;
+    component_type: number;
+    values?: any[];
+};
+
 export type DiscordInteraction = {
     id: string;
     application_id: string;
-    type: number;
-    data?: DiscordInteractionData;
+    type: DiscordInteractionType;
+    data?: DiscordApplicationCommandData | DiscordMessageComponentData;
     guild_id?: string;
     channel_id?: string;
     member?: DiscordGuildMember;
@@ -82,9 +88,28 @@ export type DiscordInteraction = {
     guild_locale?: string;
 };
 
+export enum DiscordButtonStyle {
+    Primary = 1,
+    Secondary = 2,
+    Success = 3,
+    Danger = 4,
+    Link = 5,
+}
+
+export enum DiscordComponentType {
+    ActionRow = 1,
+    Button = 2,
+    SelectMenu = 3,
+    StringInput = 4,
+    UserInput = 5,
+    RoleInput = 6,
+    MentionableInput = 7,
+    ChannelInput = 8,
+}
+
 export type DiscordComponent = {
-    type: number;
-    style?: number;
+    type: DiscordComponentType;
+    style?: DiscordButtonStyle;
     label?: string;
     emoji?: string;
     disabled?: boolean;
@@ -94,7 +119,22 @@ export type DiscordComponent = {
     placeholder?: string;
     min_values?: number;
     max_values?: number;
-    components?: string[];
+    components?: DiscordComponent[];
+};
+
+export type DiscordButton = {
+    type: DiscordComponentType.Button;
+    style: DiscordButtonStyle;
+    label: string;
+    emoji?: string;
+    disabled?: boolean;
+    url?: string;
+    custom_id?: string;
+};
+
+export type DiscordActionRow = {
+    type: DiscordComponentType.ActionRow;
+    components: DiscordComponent[];
 };
 
 export type DiscordAttachment = {
@@ -156,18 +196,39 @@ export type DiscordEmbed = {
     }[];
 };
 
+export enum DiscordInteractionResponseType {
+    Pong = 1,
+    Acknowledge = 2,
+    ChannelMessageNoSource = 3,
+    ChannelMessageWithSource = 4,
+    DeferredChannelMessageWithSource = 5,
+    DeferredUpdateMessage = 6,
+    UpdateMessage = 7,
+    ApplicationCommandAutocompleteResult = 8,
+    Modal = 9,
+}
+
+export enum DiscordInteractionType {
+    Ping = 1,
+    ApplicationCommand = 2,
+    MessageComponent = 3,
+    ApplicationCommandAutocomplete = 4,
+    ModalSubmit = 5,
+}
+
+export enum DiscordInteractionFlags {
+    Ephemeral = 64,
+}
+
 export type DiscordInteractionResponse = {
-    type: number;
+    type: DiscordInteractionResponseType;
     data?: {
         tts?: boolean;
         content?: string;
         embeds?: DiscordEmbed[];
         allowed_mentions?: string[];
         flags?: number;
+        components?: DiscordComponent[];
+        attachments?: DiscordAttachment[];
     };
-    options?: {
-        ephemeral?: boolean;
-    };
-    components?: DiscordComponent[];
-    attachments?: DiscordAttachment[];
 };

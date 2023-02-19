@@ -1,18 +1,31 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { sign } from 'tweetnacl';
-import { DiscordInteraction, DiscordInteractionData, DiscordInteractionResponse } from './type';
+import {
+    DiscordActionRow,
+    DiscordButton,
+    DiscordButtonStyle,
+    DiscordComponentType,
+    DiscordInteraction,
+    DiscordApplicationCommandData,
+    DiscordInteractionResponse,
+    DiscordInteractionResponseType,
+    DiscordInteractionType,
+    DiscordMessageComponentData,
+    DiscordInteractionFlags,
+} from './type';
 
 const PUBLIC_KEY: string = process.env.PUBLIC_KEY as string;
-const PING_PONG: APIGatewayProxyResult = { statusCode: 200, body: '{"type":1}' };
+const PING_PONG: APIGatewayProxyResult = {
+    statusCode: 200,
+    body: JSON.stringify({ type: 1 } as DiscordInteractionResponse),
+};
 const UNAUTHORIZED: APIGatewayProxyResult = { statusCode: 401, body: '[UNAUTHORIZED] invalid request signature' };
-const DUMMY_RESPONSE: APIGatewayProxyResult = { statusCode: 200, body: '{"type":3,"data":{"content":"BEEP BOOP"}}' };
-const RESPONSE_TYPE = {
-    PONG: 1,
-    ACK_NO_SOURCE: 2,
-    MESSAGE_NO_SOURCE: 3,
-    MESSAGE_WITH_SOURCE: 4,
-    ACK_WITH_SOURCE: 5,
-    UPDATE_MESSAGE: 7,
+const DUMMY_RESPONSE: APIGatewayProxyResult = {
+    statusCode: 200,
+    body: JSON.stringify({
+        type: DiscordInteractionResponseType.ChannelMessageNoSource,
+        data: { content: 'BEEP BOOP!' },
+    }),
 };
 
 function verify_signature(event: APIGatewayProxyEvent): void {
@@ -40,11 +53,28 @@ function ping_pong(body: any): boolean {
 
 function command_handler(body: DiscordInteraction): APIGatewayProxyResult | void {
     const { data, member } = body;
-    const { name } = data as DiscordInteractionData;
+    const { name } = data as DiscordApplicationCommandData;
 
     if (name === 'foo') {
+        const button1: DiscordButton = {
+            type: DiscordComponentType.Button,
+            style: 1,
+            label: 'Register',
+            custom_id: 'register',
+        };
+        const button2: DiscordButton = {
+            type: 2,
+            style: DiscordButtonStyle.Danger,
+            label: 'Leave',
+            custom_id: 'leave',
+        };
+        const actionRow: DiscordActionRow = {
+            type: DiscordComponentType.ActionRow,
+            components: [button1, button2],
+        };
+
         const response: DiscordInteractionResponse = {
-            type: RESPONSE_TYPE.MESSAGE_WITH_SOURCE,
+            type: DiscordInteractionResponseType.ChannelMessageWithSource,
             data: {
                 embeds: [
                     {
@@ -52,14 +82,48 @@ function command_handler(body: DiscordInteraction): APIGatewayProxyResult | void
                         description: 'response from foo command',
                         author: {
                             name: member?.user.username,
-                            icon_url: 'https://cdn.discordapp.com/embed/avatars/' + member?.user.avatar + '.png',
+                            icon_url: member?.user.avatar
+                                ? `https://cdn.discordapp.com/avatars/${member?.user.id}/${member?.user.avatar}.png`
+                                : `https://cdn.discordapp.com/embed/avatars/${member?.user.discriminator}.png`,
                             url: 'https://discord.com/users/' + member?.user.id,
                         },
                     },
                 ],
+                flags: DiscordInteractionFlags.Ephemeral,
+                components: [actionRow],
             },
-            options: {
-                ephemeral: true,
+        };
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify(response),
+        };
+    }
+}
+
+function button_handler(body: DiscordInteraction): APIGatewayProxyResult | void {
+    const { data } = body;
+    const { custom_id } = data as DiscordMessageComponentData;
+
+    if (custom_id === 'register') {
+        const response: DiscordInteractionResponse = {
+            type: DiscordInteractionResponseType.ChannelMessageWithSource,
+            data: {
+                content: 'register button clicked',
+                flags: DiscordInteractionFlags.Ephemeral,
+            },
+        };
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify(response),
+        };
+    } else if (custom_id === 'leave') {
+        const response: DiscordInteractionResponse = {
+            type: DiscordInteractionResponseType.ChannelMessageWithSource,
+            data: {
+                content: 'leave button clicked',
+                flags: DiscordInteractionFlags.Ephemeral,
             },
         };
 
@@ -95,6 +159,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         return PING_PONG;
     }
 
+    if (body.type === DiscordInteractionType.ApplicationCommand) {
+        return command_handler(body) || DUMMY_RESPONSE;
+    } else if (body.type === DiscordInteractionType.MessageComponent) {
+        return button_handler(body) || DUMMY_RESPONSE;
+    }
+
     // dummy response
-    return command_handler(body) || DUMMY_RESPONSE;
+    return DUMMY_RESPONSE;
 };
