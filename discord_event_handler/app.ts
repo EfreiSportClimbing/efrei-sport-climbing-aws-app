@@ -1,18 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { sign } from 'tweetnacl';
 import {
-    DiscordActionRow,
-    DiscordButton,
-    DiscordButtonStyle,
-    DiscordComponentType,
     DiscordInteraction,
-    DiscordApplicationCommandData,
     DiscordInteractionResponse,
     DiscordInteractionResponseType,
     DiscordInteractionType,
-    DiscordMessageComponentData,
-    DiscordInteractionFlags,
-} from './type';
+} from './src/type';
+import { command_handler, button_handler } from './src/discord.handler';
 
 const PUBLIC_KEY: string = process.env.PUBLIC_KEY as string;
 const PING_PONG: APIGatewayProxyResult = {
@@ -49,89 +43,6 @@ function ping_pong(body: any): boolean {
         return true;
     }
     return false;
-}
-
-function command_handler(body: DiscordInteraction): APIGatewayProxyResult | void {
-    const { data, member } = body;
-    const { name } = data as DiscordApplicationCommandData;
-
-    if (name === 'foo') {
-        const button1: DiscordButton = {
-            type: DiscordComponentType.Button,
-            style: 1,
-            label: 'Register',
-            custom_id: 'register',
-        };
-        const button2: DiscordButton = {
-            type: 2,
-            style: DiscordButtonStyle.Danger,
-            label: 'Leave',
-            custom_id: 'leave',
-        };
-        const actionRow: DiscordActionRow = {
-            type: DiscordComponentType.ActionRow,
-            components: [button1, button2],
-        };
-
-        const response: DiscordInteractionResponse = {
-            type: DiscordInteractionResponseType.ChannelMessageWithSource,
-            data: {
-                embeds: [
-                    {
-                        title: 'bar',
-                        description: 'response from foo command',
-                        author: {
-                            name: member?.user.username,
-                            icon_url: member?.user.avatar
-                                ? `https://cdn.discordapp.com/avatars/${member?.user.id}/${member?.user.avatar}.png`
-                                : `https://cdn.discordapp.com/embed/avatars/${member?.user.discriminator}.png`,
-                            url: 'https://discord.com/users/' + member?.user.id,
-                        },
-                    },
-                ],
-                flags: DiscordInteractionFlags.Ephemeral,
-                components: [actionRow],
-            },
-        };
-
-        return {
-            statusCode: 200,
-            body: JSON.stringify(response),
-        };
-    }
-}
-
-function button_handler(body: DiscordInteraction): APIGatewayProxyResult | void {
-    const { data } = body;
-    const { custom_id } = data as DiscordMessageComponentData;
-
-    if (custom_id === 'register') {
-        const response: DiscordInteractionResponse = {
-            type: DiscordInteractionResponseType.ChannelMessageWithSource,
-            data: {
-                content: 'register button clicked',
-                flags: DiscordInteractionFlags.Ephemeral,
-            },
-        };
-
-        return {
-            statusCode: 200,
-            body: JSON.stringify(response),
-        };
-    } else if (custom_id === 'leave') {
-        const response: DiscordInteractionResponse = {
-            type: DiscordInteractionResponseType.ChannelMessageWithSource,
-            data: {
-                content: 'leave button clicked',
-                flags: DiscordInteractionFlags.Ephemeral,
-            },
-        };
-
-        return {
-            statusCode: 200,
-            body: JSON.stringify(response),
-        };
-    }
 }
 
 /**

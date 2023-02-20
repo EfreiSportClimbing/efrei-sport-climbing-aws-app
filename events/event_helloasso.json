@@ -1,0 +1,57 @@
+{
+    "resource": "/helloasso-event-handler",
+    "path": "/helloasso-event-handler",
+    "httpMethod": "POST",
+    "headers": {
+        "content-type": "application/json",
+        "Host": "efrei-sport-climbing.live",
+        "X-Amzn-Trace-Id": "Root=1-63f25515-40f13e0a53e4061f04fc59be",
+        "X-Forwarded-For": "35.227.62.178",
+        "X-Forwarded-Port": "443",
+        "X-Forwarded-Proto": "https",
+        "x-signature-timestamp": "1676825877"
+    },
+    "multiValueHeaders": {
+        "content-type": ["application/json"],
+        "Host": ["efrei-sport-climbing.live"],
+        "X-Amzn-Trace-Id": ["Root=1-63f25515-40f13e0a53e4061f04fc59be"],
+        "X-Forwarded-For": ["35.227.62.178"],
+        "X-Forwarded-Port": ["443"],
+        "X-Forwarded-Proto": ["https"],
+        "x-signature-timestamp": ["1676825877"]
+    },
+    "queryStringParameters": null,
+    "multiValueQueryStringParameters": null,
+    "pathParameters": null,
+    "stageVariables": null,
+    "requestContext": {
+        "resourceId": "14oj1y",
+        "resourcePath": "/helloasso-event-handler",
+        "httpMethod": "POST",
+        "extendedRequestId": "AmI7XEMWCGYFhpQ=",
+        "requestTime": "19/Feb/2023:16:57:57 +0000",
+        "path": "/helloasso-event-handler",
+        "accountId": "069545802036",
+        "protocol": "HTTP/1.1",
+        "stage": "Prod",
+        "domainPrefix": "efrei-sport-climbing",
+        "requestTimeEpoch": 1676825877244,
+        "requestId": "7708e3b9-3081-4a05-96a9-b7ea7e95330b",
+        "identity": {
+            "cognitoIdentityPoolId": null,
+            "accountId": null,
+            "cognitoIdentityId": null,
+            "caller": null,
+            "sourceIp": "35.227.62.178",
+            "principalOrgId": null,
+            "accessKey": null,
+            "cognitoAuthenticationType": null,
+            "cognitoAuthenticationProvider": null,
+            "userArn": null,
+            "user": null
+        },
+        "domainName": "efrei-sport-climbing.live",
+        "apiId": "bvm159wvd7"
+    },
+    "body": "{\"event\":\"donation\":{\"id\":123456789,\"amount\":100,\"currency\":\"EUR\",\"date\":\"2021-01-01T00:00:00+00:00\",\"payment\":{\"id\":123456789,\"amount\":100,\"currency\":\"EUR\",\"date\":\"2021-01-01T00:00:00+00:00\",\"status\":\"paid\"},\"paymentMethod\":{\"id\":123456789,\"type\":\"card\",\"brand\":\"visa\",\"last4\":\"1234\",\"expMonth\":1,\"expYear\":2022,\"holderName\":\"John Doe\",\"holderAddress\":\"1 rue de la Paix 75000 Paris\",\"holderZipCode\":\"75000\",\"holderCity\":\"Paris\",\"holderCountry\":\"FR\"},\"donor\":{\"id\":123456789,\"email\":\""
+}
