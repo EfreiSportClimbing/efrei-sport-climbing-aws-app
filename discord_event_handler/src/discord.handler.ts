@@ -10,9 +10,10 @@ import {
     DiscordInteractionResponseType,
     DiscordMessageComponentData,
     DiscordInteractionFlags,
-} from './type';
+} from './discord.types';
+import { getUser, putUser } from './dynamodb.users';
 
-export function foo_handlher(body: DiscordInteraction): APIGatewayProxyResult {
+export async function foo_handlher(body: DiscordInteraction): Promise<APIGatewayProxyResult> {
     const { member } = body;
     const button1: DiscordButton = {
         type: DiscordComponentType.Button,
@@ -31,6 +32,8 @@ export function foo_handlher(body: DiscordInteraction): APIGatewayProxyResult {
         components: [button1, button2],
     };
 
+    const user = await getUser(member?.user.id as string);
+
     const response: DiscordInteractionResponse = {
         type: DiscordInteractionResponseType.ChannelMessageWithSource,
         data: {
@@ -38,6 +41,12 @@ export function foo_handlher(body: DiscordInteraction): APIGatewayProxyResult {
                 {
                     title: 'bar',
                     description: 'response from foo command',
+                    fields: [
+                        {
+                            name: `${user.firstName} ${user.lastName}`,
+                            value: `${user.nbOfSeances}`,
+                        },
+                    ],
                     author: {
                         name: member?.user.username,
                         icon_url: member?.user.avatar
@@ -58,18 +67,45 @@ export function foo_handlher(body: DiscordInteraction): APIGatewayProxyResult {
     };
 }
 
-export function command_handler(body: DiscordInteraction): APIGatewayProxyResult | void {
+async function inscription_handler(body: DiscordInteraction): Promise<APIGatewayProxyResult> {
+    const { data, member } = body;
+
+    const { options } = data as DiscordApplicationCommandData;
+
+    await putUser({
+        id: member?.user.id as string,
+        firstName: options?.find((option) => option.name === 'prénom')?.value as string,
+        lastName: options?.find((option) => option.name === 'nom')?.value as string,
+        promo: options?.find((option) => option.name === 'promo')?.value as string,
+        nbOfSeances: 0,
+    });
+
+    const response: DiscordInteractionResponse = {
+        type: DiscordInteractionResponseType.ChannelMessageWithSource,
+        data: {
+            content: 'inscription done',
+            flags: DiscordInteractionFlags.Ephemeral,
+        },
+    };
+
+    return {
+        statusCode: 200,
+        body: JSON.stringify(response),
+    };
+}
+
+export async function command_handler(body: DiscordInteraction): Promise<APIGatewayProxyResult | void> {
     const { data } = body;
     const { name } = data as DiscordApplicationCommandData;
 
     if (name === 'séance') {
-        return foo_handlher(body);
+        return await foo_handlher(body);
     } else if (name === 'activité') {
         return void 0;
     } else if (name === 'helloasso') {
         return void 0;
     } else if (name === 'inscription') {
-        return void 0;
+        return await inscription_handler(body);
     } else if (name === 'relevé') {
         return void 0;
     }

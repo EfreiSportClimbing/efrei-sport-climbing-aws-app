@@ -5,7 +5,7 @@ import {
     DiscordInteractionResponse,
     DiscordInteractionResponseType,
     DiscordInteractionType,
-} from './src/type';
+} from './src/discord.types';
 import { command_handler, button_handler } from './src/discord.handler';
 
 const PUBLIC_KEY: string = process.env.PUBLIC_KEY as string;
@@ -71,7 +71,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
     }
 
     if (body.type === DiscordInteractionType.ApplicationCommand) {
-        return command_handler(body) || DUMMY_RESPONSE;
+        return (await command_handler(body)) || DUMMY_RESPONSE;
     } else if (body.type === DiscordInteractionType.MessageComponent) {
         return button_handler(body) || DUMMY_RESPONSE;
     }

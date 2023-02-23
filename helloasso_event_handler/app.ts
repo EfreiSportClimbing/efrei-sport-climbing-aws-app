@@ -12,6 +12,8 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     // debug log
     console.log('event', event);
+    const body = JSON.parse(event.body || '{}') as any;
+    console.log('body', body);
     // dummy response
     return { statusCode: 200, body: 'Hello from Lambda' };
 };

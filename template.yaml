@@ -9,7 +9,7 @@ Description: >
 Globals:
   Function:
     Timeout: 3
-    MemorySize: 256
+    MemorySize: 1024
     Tracing: Active
   Api:
     TracingEnabled: true
@@ -32,6 +32,8 @@ Resources:
       Environment:
         Variables:
           PUBLIC_KEY: f89f9764c9ce8ce28b688306bf9c996a686ce1de04e804091d52d602016fc77a
+      Policies: 
+        - AmazonDynamoDBFullAccess
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
       BuildProperties:
@@ -62,6 +64,17 @@ Resources:
         Sourcemap: true
         EntryPoints:
         - app.ts
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Efrei-Sport-Climbing-App.users
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
 
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
@@ -85,3 +98,6 @@ Outputs:
   HelloAssoEventHandlerFunctionIamRole:
     Description: Implicit IAM Role created for Hello Asso Event Handler function
     Value: !GetAtt HelloAssoEventHandlerFunctionRole.Arn
+  User:
+    Description: Table Created for users
+    Value: !Ref UsersTable
