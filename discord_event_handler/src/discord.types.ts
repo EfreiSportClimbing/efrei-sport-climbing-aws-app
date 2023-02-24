@@ -142,9 +142,9 @@ export type DiscordAttachment = {
     filename: string;
     description?: string;
     content_type?: string;
-    size: number;
-    url: string;
-    proxy_url: string;
+    size?: number;
+    url?: string;
+    proxy_url?: string;
     height?: number;
     width?: number;
     ephemeral?: boolean;
@@ -231,4 +231,14 @@ export type DiscordInteractionResponse = {
         components?: DiscordComponent[];
         attachments?: DiscordAttachment[];
     };
+};
+
+export type DiscordMessagePost = {
+    content?: string;
+    tts?: boolean;
+    embeds?: DiscordEmbed[];
+    allowed_mentions?: string[];
+    flags?: number;
+    components?: DiscordComponent[];
+    attachments?: DiscordAttachment[];
 };

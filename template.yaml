@@ -34,6 +34,10 @@ Resources:
           PUBLIC_KEY: f89f9764c9ce8ce28b688306bf9c996a686ce1de04e804091d52d602016fc77a
       Policies: 
         - AmazonDynamoDBFullAccess
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:Efrei-Sport-Climbing-App/secrets/discord_bot_token-1SlCTW"
+        - S3ReadPolicy:
+            BucketName: efrei-sport-climbing-app-data
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
       BuildProperties:
@@ -75,6 +79,21 @@ Resources:
         - AttributeName: id
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
+  SessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Efrei-Sport-Climbing-App.sessions
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
 
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
@@ -98,6 +117,9 @@ Outputs:
   HelloAssoEventHandlerFunctionIamRole:
     Description: Implicit IAM Role created for Hello Asso Event Handler function
     Value: !GetAtt HelloAssoEventHandlerFunctionRole.Arn
-  User:
-    Description: Table Created for users
+  Users:
+    Description: Table for users of the association
     Value: !Ref UsersTable
+  Sessions:
+    Description: Table for sessions of the bot
+    Value: !Ref SessionsTable

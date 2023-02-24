@@ -56,7 +56,7 @@ function ping_pong(body: any): boolean {
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     // debug log
-    console.log('event', event);
+    //console.log('event', event);
 
     try {
         verify_signature(event);

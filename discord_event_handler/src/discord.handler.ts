@@ -10,11 +10,78 @@ import {
     DiscordInteractionResponseType,
     DiscordMessageComponentData,
     DiscordInteractionFlags,
+    DiscordMessagePost,
+    DiscordEmbed,
+    DiscordMessage,
 } from './discord.types';
 import { getUser, putUser } from './dynamodb.users';
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { findSession, putSession } from './dynamodb.sessions';
+import { getImage } from './s3.images';
 
-export async function foo_handlher(body: DiscordInteraction): Promise<APIGatewayProxyResult> {
+const SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/discord_bot_token';
+
+const clientSMC = new SecretsManagerClient({
+    region: 'eu-west-3',
+});
+
+const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+const getSecret = async (secretPath: string) => {
+    const command = new GetSecretValueCommand({ SecretId: secretPath });
+    const response = await clientSMC.send(command);
+    return response.SecretString ? JSON.parse(response.SecretString) : undefined;
+};
+
+const generateDate = (day: string, hour: string) => {
+    //generate date from command
+    const date = new Date();
+
+    const daytoset = DAYS.indexOf(day);
+    const currentDay = date.getDay();
+    const distance = (daytoset + 7 - currentDay) % 7;
+    date.setDate(date.getDate() + distance);
+
+    hour = hour.split('h')[0];
+    date.setHours(parseInt(hour));
+    date.setMinutes(0);
+    date.setSeconds(0);
+    date.setMilliseconds(0);
+
+    return date;
+};
+
+export async function seance_handlher(body: DiscordInteraction): Promise<APIGatewayProxyResult> {
     const { member } = body;
+    const { data } = body;
+    const { options } = data as DiscordApplicationCommandData;
+
+    const day = options?.find((option) => option.name === 'date')?.value as string;
+    const hour = options?.find((option) => option.name === 'heure')?.value as string;
+    const location = options?.find((option) => option.name === 'salle')?.value as string;
+
+    const date = generateDate(day, hour);
+
+    const session = await findSession(date, location).catch((err) => {
+        console.log(err);
+        return undefined;
+    });
+
+    if (session) {
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                type: DiscordInteractionResponseType.ChannelMessageWithSource,
+                data: {
+                    content: 'La séance est existe déjà',
+                },
+            }),
+        };
+    }
+
+    const user = await getUser(member?.user.id as string).catch(() => undefined);
+    const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
+
     const button1: DiscordButton = {
         type: DiscordComponentType.Button,
         style: 1,
@@ -32,32 +99,74 @@ export async function foo_handlher(body: DiscordInteraction): Promise<APIGateway
         components: [button1, button2],
     };
 
-    const user = await getUser(member?.user.id as string);
+    const embed: DiscordEmbed = {
+        title: date.toLocaleDateString('fr-FR', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+        }),
+        description: `Séance de grimpe à **${location.charAt(0).toUpperCase() + location.slice(1)}**.`,
+        fields: [
+            {
+                name: `Participants :`,
+                value: `- ${user?.firstName} ${user?.lastName}`,
+                inline: false,
+            },
+        ],
+        author: {
+            name: user?.firstName + ' ' + user?.lastName,
+            icon_url: member?.user.avatar
+                ? `https://cdn.discordapp.com/avatars/${member?.user.id}/${member?.user.avatar}.png`
+                : `https://cdn.discordapp.com/embed/avatars/${member?.user.discriminator}.png`,
+            url: 'https://discord.com/users/' + member?.user.id,
+        },
+        color: 15844367,
+        thumbnail: {
+            url: 'attachment://antrebloc.png',
+        },
+    };
+    // create message to send to discord with file attachment
+    const message: DiscordMessagePost = {
+        embeds: [embed],
+        components: [actionRow],
+        attachments: [
+            {
+                filename: 'antrebloc.png',
+                id: '0',
+                description: 'antrebloc.png',
+            },
+        ],
+    };
+
+    const headers = new Headers();
+    headers.append('Authorization', `Bot ${DISCORD_BOT_TOKEN}`);
+    const formData = new FormData();
+    formData.append('payload_json', JSON.stringify(message));
+    const file = await getImage('images/antrebloc.png');
+    formData.append('files[0]', file, 'images/antrebloc.png');
+
+    // make request at discord api to send a message to the channel with the file attachment
+    const reponse = (await fetch('https://discord.com/api/v8/channels/489476855657660436/messages', {
+        method: 'POST',
+        headers: headers,
+        body: formData,
+    }).then((res) => res.json())) as DiscordMessage;
+
+    await putSession({
+        id: reponse.id,
+        date: date,
+        location: location,
+        participants: [member?.user.id as string],
+    });
 
     const response: DiscordInteractionResponse = {
         type: DiscordInteractionResponseType.ChannelMessageWithSource,
         data: {
-            embeds: [
-                {
-                    title: 'bar',
-                    description: 'response from foo command',
-                    fields: [
-                        {
-                            name: `${user.firstName} ${user.lastName}`,
-                            value: `${user.nbOfSeances}`,
-                        },
-                    ],
-                    author: {
-                        name: member?.user.username,
-                        icon_url: member?.user.avatar
-                            ? `https://cdn.discordapp.com/avatars/${member?.user.id}/${member?.user.avatar}.png`
-                            : `https://cdn.discordapp.com/embed/avatars/${member?.user.discriminator}.png`,
-                        url: 'https://discord.com/users/' + member?.user.id,
-                    },
-                },
-            ],
+            content: 'La séance a été créée',
             flags: DiscordInteractionFlags.Ephemeral,
-            components: [actionRow],
         },
     };
 
@@ -99,7 +208,7 @@ export async function command_handler(body: DiscordInteraction): Promise<APIGate
     const { name } = data as DiscordApplicationCommandData;
 
     if (name === 'séance') {
-        return await foo_handlher(body);
+        return await seance_handlher(body);
     } else if (name === 'activité') {
         return void 0;
     } else if (name === 'helloasso') {

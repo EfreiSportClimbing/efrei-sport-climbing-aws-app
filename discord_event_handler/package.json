@@ -32,7 +32,10 @@
     },
     "dependencies": {
         "@aws-sdk/client-dynamodb": "^3.276.0",
+        "@aws-sdk/client-s3": "^3.278.0",
+        "@aws-sdk/client-secrets-manager": "^3.278.0",
         "aws-sdk": "^2.1320.0",
+        "node-fetch": "^3.3.0",
         "tweetnacl": "^1.0.3"
     }
 }

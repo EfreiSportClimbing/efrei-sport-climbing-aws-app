@@ -5,3 +5,10 @@ export type User = {
     promo: string;
     nbOfSeances: number;
 };
+
+export type Session = {
+    id: string;
+    date: Date;
+    participants: string[];
+    location: string;
+};
