@@ -14,9 +14,9 @@ import {
     DiscordEmbed,
     DiscordMessage,
 } from './discord.types';
-import { getUser, putUser } from './dynamodb.users';
+import { getUser, putUser } from 'commons/dynamodb.users';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
-import { findSession, putSession } from './dynamodb.sessions';
+import { findSession, putSession } from 'commons/dynamodb.sessions';
 import { getImage } from './s3.images';
 
 const SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/discord_bot_token';
@@ -146,7 +146,7 @@ export async function seance_handlher(body: DiscordInteraction): Promise<APIGate
     const formData = new FormData();
     formData.append('payload_json', JSON.stringify(message));
     const file = await getImage('images/antrebloc.png');
-    formData.append('files[0]', file, 'images/antrebloc.png');
+    formData.append('files[0]', file);
 
     // make request at discord api to send a message to the channel with the file attachment
     const reponse = (await fetch('https://discord.com/api/v8/channels/489476855657660436/messages', {
@@ -169,7 +169,6 @@ export async function seance_handlher(body: DiscordInteraction): Promise<APIGate
             flags: DiscordInteractionFlags.Ephemeral,
         },
     };
-
     return {
         statusCode: 200,
         body: JSON.stringify(response),

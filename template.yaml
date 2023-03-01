@@ -18,7 +18,7 @@ Resources:
   DiscordEventHandlerFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
-      CodeUri: discord_event_handler/
+      CodeUri: functions/discord_event_handler/
       Handler: app.lambdaHandler
       Runtime: nodejs18.x
       Architectures:
@@ -38,6 +38,8 @@ Resources:
             SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:Efrei-Sport-Climbing-App/secrets/discord_bot_token-1SlCTW"
         - S3ReadPolicy:
             BucketName: efrei-sport-climbing-app-data
+      Layers:
+        - !Ref LayerCommons
     Metadata: # Manage esbuild properties
       BuildMethod: esbuild
       BuildProperties:
@@ -45,11 +47,13 @@ Resources:
         Target: es2020
         Sourcemap: true
         EntryPoints:
-        - app.ts
+          - app.ts
+        External:
+          - commons
   HelloAssoEventHandlerFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
-      CodeUri: helloasso_event_handler/
+      CodeUri: functions/helloasso_event_handler/
       Handler: app.lambdaHandler
       Runtime: nodejs18.x
       Architectures:
@@ -90,10 +94,15 @@ Resources:
         - AttributeName: id
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
-      TimeToLiveSpecification:
-        AttributeName: expiresAt
-        Enabled: true
-
+  LayerCommons:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: layers/commons/
+      CompatibleRuntimes:
+        - nodejs18.x
+      RetentionPolicy: Delete
+    Metadata:
+      BuildMethod: makefile
 
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
