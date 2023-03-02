@@ -13,25 +13,14 @@ import {
     DiscordMessagePost,
     DiscordEmbed,
     DiscordMessage,
-} from './discord.types';
+} from 'commons/discord.types';
 import { getUser, putUser } from 'commons/dynamodb.users';
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { findSession, putSession } from 'commons/dynamodb.sessions';
+import { getSecret } from 'commons/discord.secret';
 import { getImage } from './s3.images';
 
 const SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/discord_bot_token';
-
-const clientSMC = new SecretsManagerClient({
-    region: 'eu-west-3',
-});
-
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-
-const getSecret = async (secretPath: string) => {
-    const command = new GetSecretValueCommand({ SecretId: secretPath });
-    const response = await clientSMC.send(command);
-    return response.SecretString ? JSON.parse(response.SecretString) : undefined;
-};
 
 const generateDate = (day: string, hour: string) => {
     //generate date from command

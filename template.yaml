@@ -50,6 +50,41 @@ Resources:
           - app.ts
         External:
           - commons
+  DiscordGarbageCollector:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: functions/discord_garbage_collector/
+      Handler: app.lambdaHandler
+      Runtime: nodejs18.x
+      Architectures:
+      - arm64
+      Events:
+        Schedule:
+          Type: Schedule
+          Properties:
+            Schedule: 'cron(0 0 * * ? *)'
+            Name: DiscordGarbageCollectorSchedule
+            Description: Schedule removing old session in channel
+            Enabled: true
+      Environment:
+        Variables:
+          PUBLIC_KEY: f89f9764c9ce8ce28b688306bf9c996a686ce1de04e804091d52d602016fc77a
+      Policies: 
+        - AmazonDynamoDBFullAccess
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:Efrei-Sport-Climbing-App/secrets/discord_bot_token-1SlCTW"
+      Layers:
+        - !Ref LayerCommons
+    Metadata: # Manage esbuild properties
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        EntryPoints:
+          - app.ts
+        External:
+          - commons
   HelloAssoEventHandlerFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:

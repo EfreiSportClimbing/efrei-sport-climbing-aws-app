@@ -5,7 +5,7 @@ import {
     DiscordInteractionResponse,
     DiscordInteractionResponseType,
     DiscordInteractionType,
-} from './src/discord.types';
+} from 'commons/discord.types';
 import { command_handler, button_handler } from './src/discord.handler';
 
 const PUBLIC_KEY: string = process.env.PUBLIC_KEY as string;
