@@ -9,6 +9,5 @@ export type User = {
 export type Session = {
     id: string;
     date: Date;
-    participants: string[];
     location: string;
 };

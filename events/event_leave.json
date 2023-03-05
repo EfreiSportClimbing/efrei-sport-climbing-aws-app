@@ -1,0 +1,63 @@
+{
+    "resource": "/discord-event-handler",
+    "path": "/discord-event-handler",
+    "httpMethod": "POST",
+    "headers": {
+        "content-type": "application/json",
+        "Host": "efrei-sport-climbing.live",
+        "User-Agent": "Discord-Interactions/1.0 (+https://discord.com)",
+        "X-Amzn-Trace-Id": "Root=1-64021251-5e0da4ad1d1caf5b2ff415e5",
+        "X-Forwarded-For": "35.227.62.178",
+        "X-Forwarded-Port": "443",
+        "X-Forwarded-Proto": "https",
+        "x-signature-ed25519": "597d14a22058fdf2dba0cbdbc04b65ce769e994ca239a892a04c289c0d6b9c8f11f66c43e415255512159c11762ba47d4aa63654d9366045561f5796ada39800",
+        "x-signature-timestamp": "1677857360"
+    },
+    "multiValueHeaders": {
+        "content-type": ["application/json"],
+        "Host": ["efrei-sport-climbing.live"],
+        "User-Agent": ["Discord-Interactions/1.0 (+https://discord.com)"],
+        "X-Amzn-Trace-Id": ["Root=1-64021251-5e0da4ad1d1caf5b2ff415e5"],
+        "X-Forwarded-For": ["35.227.62.178"],
+        "X-Forwarded-Port": ["443"],
+        "X-Forwarded-Proto": ["https"],
+        "x-signature-ed25519": ["597d14a22058fdf2dba0cbdbc04b65ce769e994ca239a892a04c289c0d6b9c8f11f66c43e415255512159c11762ba47d4aa63654d9366045561f5796ada39800"],
+        "x-signature-timestamp": ["1677857360"]
+    },
+    "queryStringParameters": null,
+    "multiValueQueryStringParameters": null,
+    "pathParameters": null,
+    "stageVariables": null,
+    "requestContext": {
+        "resourceId": "14oj1y",
+        "resourcePath": "/discord-event-handler",
+        "httpMethod": "POST",
+        "extendedRequestId": "BNfMuHB_CGYFrvg=",
+        "requestTime": "03/Mar/2023:15:29:21 +0000",
+        "path": "/discord-event-handler",
+        "accountId": "069545802036",
+        "protocol": "HTTP/1.1",
+        "stage": "Prod",
+        "domainPrefix": "efrei-sport-climbing",
+        "requestTimeEpoch": 1677857361147,
+        "requestId": "882f9490-9245-4afe-974b-cc15c4cb191d",
+        "identity": {
+            "cognitoIdentityPoolId": null,
+            "accountId": null,
+            "cognitoIdentityId": null,
+            "caller": null,
+            "sourceIp": "35.227.62.178",
+            "principalOrgId": null,
+            "accessKey": null,
+            "cognitoAuthenticationType": null,
+            "cognitoAuthenticationProvider": null,
+            "userArn": null,
+            "userAgent": "Discord-Interactions/1.0 (+https://discord.com)",
+            "user": null
+        },
+        "domainName": "efrei-sport-climbing.live",
+        "apiId": "bvm159wvd7"
+    },
+    "body": "{\"app_permissions\":\"4398046511103\",\"application_id\":\"1071807223044513822\",\"channel_id\":\"489476855657660436\",\"data\":{\"component_type\":2,\"custom_id\":\"leave\"},\"entitlement_sku_ids\":[],\"guild_id\":\"487993332010713096\",\"guild_locale\":\"fr\",\"id\":\"1081236880584101970\",\"locale\":\"fr\",\"member\":{\"avatar\":null,\"communication_disabled_until\":null,\"deaf\":false,\"flags\":0,\"is_pending\":false,\"joined_at\":\"2018-09-08T14:31:16.831000+00:00\",\"mute\":false,\"nick\":null,\"pending\":false,\"permissions\":\"4398046511103\",\"premium_since\":null,\"roles\":[\"489169963429658624\",\"489872461261832212\"],\"user\":{\"avatar\":\"17e78f8ee2045c74872d05f7557b64f8\",\"avatar_decoration\":null,\"discriminator\":\"8065\",\"display_name\":null,\"id\":\"315852341620244491\",\"public_flags\":4194432,\"username\":\"Poool\"}},\"message\":{\"attachments\":[],\"author\":{\"avatar\":\"6852f9d0fa93821cf3fa2d0ca3189cc2\",\"avatar_decoration\":null,\"bot\":true,\"discriminator\":\"2195\",\"display_name\":null,\"id\":\"1071807223044513822\",\"public_flags\":524288,\"username\":\"Efrei Sport Climbing - Bot\"},\"channel_id\":\"489476855657660436\",\"components\":[{\"components\":[{\"custom_id\":\"register\",\"label\":\"Register\",\"style\":1,\"type\":2},{\"custom_id\":\"leave\",\"label\":\"Leave\",\"style\":4,\"type\":2}],\"type\":1}],\"content\":\"\",\"edited_timestamp\":null,\"embeds\":[{\"author\":{\"icon_url\":\"https://cdn.discordapp.com/avatars/315852341620244491/17e78f8ee2045c74872d05f7557b64f8.png\",\"name\":\"Paul Mairesse\",\"proxy_icon_url\":\"https://images-ext-2.discordapp.net/external/_eBvQVGYVR4WmQtAmTO-2dn2zzb2cNTjluvWk40P8oA/https/cdn.discordapp.com/avatars/315852341620244491/17e78f8ee2045c74872d05f7557b64f8.png\",\"url\":\"https://discord.com/users/315852341620244491\"},\"color\":15844367,\"description\":\"Séance de grimpe à **Antrebloc**.\",\"fields\":[{\"inline\":false,\"name\":\"Participants :\",\"value\":\"- Paul Mairesse\"}],\"thumbnail\":{\"height\":192,\"proxy_url\":\"https://media.discordapp.net/attachments/489476855657660436/1081235990481481788/antrebloc.png\",\"url\":\"https://cdn.discordapp.com/attachments/489476855657660436/1081235990481481788/antrebloc.png\",\"width\":256},\"title\":\"lundi 6 mars 2023 à 08:00\",\"type\":\"rich\"}],\"flags\":0,\"id\":\"1081235990397599764\",\"mention_everyone\":false,\"mention_roles\":[],\"mentions\":[],\"pinned\":false,\"timestamp\":\"2023-03-03T15:25:48.504000+00:00\",\"tts\":false,\"type\":0},\"token\":\"aW50ZXJhY3Rpb246MTA4MTIzNjg4MDU4NDEwMTk3MDp4MFpPT0hXWTU0MWFLZnpSUEVQNUt6NGJncjRLYUVjaXpSOUoyNFNpTkwzeUREcGs5a1lSbE5GejVyOVl4UFpmbG1DODdJbmJmV0hXaDhPejNiUlU0VTB2MzhLWEJEVERrdlNwc0xhc3lnSExVMHFSRXlqVVp1dW53WkFoU1FOeQ\",\"type\":3,\"version\":1}",
+    "isBase64Encoded": false
+}

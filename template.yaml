@@ -31,7 +31,13 @@ Resources:
             Method: post
       Environment:
         Variables:
+          DISCORD_APP_ID: "1071807223044513822"
           PUBLIC_KEY: f89f9764c9ce8ce28b688306bf9c996a686ce1de04e804091d52d602016fc77a
+          DISCORD_ROLE_ID: "1082065468682154034"
+          GUILD_ID: "934805065745715240"
+          ANTREBLOC_CHANNEL: "1081991146697408534"
+          CLIMBUP_CHANNEL: "1081991172408487986"
+          ARKOSE_CHANNEL: "1081991215467200623"
       Policies: 
         - AmazonDynamoDBFullAccess
         - AWSSecretsManagerGetSecretValuePolicy:
@@ -125,9 +131,13 @@ Resources:
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
+        - AttributeName: sortId
+          AttributeType: S
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+        - AttributeName: sortId
+          KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
   LayerCommons:
     Type: AWS::Serverless::LayerVersion

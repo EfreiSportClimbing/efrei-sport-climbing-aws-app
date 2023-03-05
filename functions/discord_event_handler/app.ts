@@ -7,8 +7,9 @@ import {
     DiscordInteractionType,
 } from 'commons/discord.types';
 import { command_handler, button_handler } from './src/discord.handler';
+import { checkRole } from './src/discord.utils';
 
-const PUBLIC_KEY: string = process.env.PUBLIC_KEY as string;
+export const PUBLIC_KEY: string = process.env.PUBLIC_KEY as string;
 const PING_PONG: APIGatewayProxyResult = {
     statusCode: 200,
     body: JSON.stringify({ type: 1 } as DiscordInteractionResponse),
@@ -56,7 +57,7 @@ function ping_pong(body: any): boolean {
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     // debug log
-    //console.log('event', event);
+    console.log('event', event);
 
     try {
         verify_signature(event);
@@ -70,10 +71,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         return PING_PONG;
     }
 
-    if (body.type === DiscordInteractionType.ApplicationCommand) {
+    const roleCheck = checkRole(body); // check if user has the right role
+    if (roleCheck) {
+        return roleCheck;
+    } else if (body.type === DiscordInteractionType.ApplicationCommand) {
+        // handle if it's a command
         return (await command_handler(body)) || DUMMY_RESPONSE;
     } else if (body.type === DiscordInteractionType.MessageComponent) {
-        return button_handler(body) || DUMMY_RESPONSE;
+        // handle if it's a button
+        return (await button_handler(body)) || DUMMY_RESPONSE;
     }
 
     // dummy response

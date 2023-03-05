@@ -13,14 +13,29 @@ import {
     DiscordMessagePost,
     DiscordEmbed,
     DiscordMessage,
+    DiscordGuildMember,
 } from 'commons/discord.types';
 import { getUser, putUser } from 'commons/dynamodb.users';
-import { findSession, putSession } from 'commons/dynamodb.sessions';
+import {
+    countParticipants,
+    deleteSession,
+    findSession,
+    putSession,
+    removeUserFromSession,
+} from 'commons/dynamodb.sessions';
+import { User } from 'commons/dynamodb.types';
 import { getSecret } from 'commons/discord.secret';
 import { getImage } from './s3.images';
+import { editResponse, deferResponse } from './discord.interaction';
+import { USER_NOT_FOUND_RESPONSE } from './discord.utils';
 
 const SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/discord_bot_token';
-const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+const CHANNELS: { [key: string]: string } = {
+    antrebloc: process.env.ANTREBLOC_CHANNEL as string,
+    'climb-up': process.env.CLIMBUP_CHANNEL as string,
+    arkose: process.env.ARKOSE_CHANNEL as string,
+};
 
 const generateDate = (day: string, hour: string) => {
     //generate date from command
@@ -29,6 +44,7 @@ const generateDate = (day: string, hour: string) => {
     const daytoset = DAYS.indexOf(day);
     const currentDay = date.getDay();
     const distance = (daytoset + 7 - currentDay) % 7;
+    console.log(distance, day, daytoset, currentDay);
     date.setDate(date.getDate() + distance);
 
     hour = hour.split('h')[0];
@@ -40,35 +56,12 @@ const generateDate = (day: string, hour: string) => {
     return date;
 };
 
-export async function seance_handlher(body: DiscordInteraction): Promise<APIGatewayProxyResult> {
-    const { member } = body;
-    const { data } = body;
-    const { options } = data as DiscordApplicationCommandData;
-
-    const day = options?.find((option) => option.name === 'date')?.value as string;
-    const hour = options?.find((option) => option.name === 'heure')?.value as string;
-    const location = options?.find((option) => option.name === 'salle')?.value as string;
-
-    const date = generateDate(day, hour);
-
-    const session = await findSession(date, location).catch((err) => {
-        console.log(err);
-        return undefined;
-    });
-
-    if (session) {
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                type: DiscordInteractionResponseType.ChannelMessageWithSource,
-                data: {
-                    content: 'La séance est existe déjà',
-                },
-            }),
-        };
-    }
-
-    const user = await getUser(member?.user.id as string).catch(() => undefined);
+export async function create_seance(
+    user: User,
+    member: DiscordGuildMember,
+    date: Date,
+    location: string,
+): Promise<DiscordMessagePost> {
     const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
 
     const button1: DiscordButton = {
@@ -101,20 +94,20 @@ export async function seance_handlher(body: DiscordInteraction): Promise<APIGate
         fields: [
             {
                 name: `Participants :`,
-                value: `- ${user?.firstName} ${user?.lastName}`,
+                value: `- ${user.firstName} ${user.lastName}`,
                 inline: false,
             },
         ],
         author: {
-            name: user?.firstName + ' ' + user?.lastName,
+            name: user.firstName + ' ' + user.lastName,
             icon_url: member?.user.avatar
-                ? `https://cdn.discordapp.com/avatars/${member?.user.id}/${member?.user.avatar}.png`
+                ? `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.png`
                 : `https://cdn.discordapp.com/embed/avatars/${member?.user.discriminator}.png`,
-            url: 'https://discord.com/users/' + member?.user.id,
+            url: 'https://discord.com/users/' + member.user.id,
         },
         color: 15844367,
         thumbnail: {
-            url: 'attachment://antrebloc.png',
+            url: `attachment://${location}.png`,
         },
     };
     // create message to send to discord with file attachment
@@ -123,9 +116,9 @@ export async function seance_handlher(body: DiscordInteraction): Promise<APIGate
         components: [actionRow],
         attachments: [
             {
-                filename: 'antrebloc.png',
+                filename: `${location}.png`,
                 id: '0',
-                description: 'antrebloc.png',
+                description: 'image',
             },
         ],
     };
@@ -134,34 +127,65 @@ export async function seance_handlher(body: DiscordInteraction): Promise<APIGate
     headers.append('Authorization', `Bot ${DISCORD_BOT_TOKEN}`);
     const formData = new FormData();
     formData.append('payload_json', JSON.stringify(message));
-    const file = await getImage('images/antrebloc.png');
+    const file = await getImage(`images/${location}.png`);
     formData.append('files[0]', file);
 
     // make request at discord api to send a message to the channel with the file attachment
-    const reponse = (await fetch('https://discord.com/api/v8/channels/489476855657660436/messages', {
+    const reponse = (await fetch('https://discord.com/api/v8/channels/' + CHANNELS[location] + '/messages', {
         method: 'POST',
         headers: headers,
         body: formData,
     }).then((res) => res.json())) as DiscordMessage;
 
-    await putSession({
-        id: reponse.id,
-        date: date,
-        location: location,
-        participants: [member?.user.id as string],
+    await putSession(
+        {
+            id: reponse.id,
+            date: date,
+            location: location,
+        },
+        [user.id],
+    );
+
+    const dayString = date.toLocaleDateString('fr-FR', {
+        weekday: 'long',
     });
 
-    const response: DiscordInteractionResponse = {
-        type: DiscordInteractionResponseType.ChannelMessageWithSource,
-        data: {
-            content: 'La séance a été créée',
-            flags: DiscordInteractionFlags.Ephemeral,
-        },
-    };
+    const hourString = date.toLocaleTimeString('fr-FR', {
+        hour: 'numeric',
+    });
+
     return {
-        statusCode: 200,
-        body: JSON.stringify(response),
+        content: `Ajout d'une séance de grimpe à **${
+            location.charAt(0).toUpperCase() + location.slice(1)
+        }** le **${dayString}** à **${hourString}**.`,
     };
+}
+
+export async function seance_handlher(body: DiscordInteraction, user: User): Promise<void> {
+    const { member } = body;
+    const { data } = body;
+    const { options } = data as DiscordApplicationCommandData;
+
+    const day = options?.find((option) => option.name === 'date')?.value as string;
+    const hour = options?.find((option) => option.name === 'heure')?.value as string;
+    const location = options?.find((option) => option.name === 'salle')?.value as string;
+
+    const date = generateDate(day, hour);
+
+    const session = await findSession(date, location).catch((err) => {
+        console.log(err);
+        return;
+    });
+
+    if (session) {
+        const message: DiscordMessagePost = {
+            content: 'Cette séance existe déjà !',
+        };
+        await editResponse(body, message);
+    } else {
+        const response = await create_seance(user, member as DiscordGuildMember, date, location);
+        await editResponse(body, response);
+    }
 }
 
 async function inscription_handler(body: DiscordInteraction): Promise<APIGatewayProxyResult> {
@@ -192,25 +216,93 @@ async function inscription_handler(body: DiscordInteraction): Promise<APIGateway
 }
 
 export async function command_handler(body: DiscordInteraction): Promise<APIGatewayProxyResult | void> {
-    const { data } = body;
+    const { data, member } = body;
     const { name } = data as DiscordApplicationCommandData;
 
-    if (name === 'séance') {
-        return await seance_handlher(body);
-    } else if (name === 'activité') {
-        return void 0;
-    } else if (name === 'helloasso') {
-        return void 0;
-    } else if (name === 'inscription') {
+    if (name === 'inscription') {
         return await inscription_handler(body);
-    } else if (name === 'relevé') {
-        return void 0;
+    } else {
+        await deferResponse(body, true);
+        const user = await getUser(member?.user.id as string).catch(() => undefined);
+        if (!user) {
+            await editResponse(body, USER_NOT_FOUND_RESPONSE);
+            return;
+        }
+        if (name === 'activité') {
+            return void 0;
+        } else if (name === 'helloasso') {
+            return void 0;
+        } else if (name === 'séance') {
+            return await seance_handlher(body, user);
+        } else if (name === 'relevé') {
+            return void 0;
+        }
     }
 }
 
-export function button_handler(body: DiscordInteraction): APIGatewayProxyResult | void {
+export async function leaving_button_handler(body: DiscordInteraction, user: User): Promise<DiscordMessagePost> {
+    const { message } = body;
+    const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
+
+    try {
+        await removeUserFromSession(message?.id as string, body.member?.user.id as string);
+    } catch (err) {
+        return {
+            content: "Vous n'êtes pas inscrit à cette séance",
+        };
+    }
+
+    const nbParticipants = await countParticipants(message?.id as string);
+    if (nbParticipants === 0) {
+        await deleteSession(body.message?.id as string);
+        await fetch(`https://discord.com/api/v8/channels/${body.channel_id}/messages/${body.message?.id}`, {
+            method: 'DELETE',
+            headers: {
+                Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
+            },
+        });
+        return { content: 'La séance a été supprimée.' };
+    } else {
+        // edit embed
+        const message = (await fetch(
+            `https://discord.com/api/v8/channels/${body.channel_id}/messages/${body.message?.id}`,
+            {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
+                },
+            },
+        ).then((res) => res.json())) as DiscordMessage;
+        const embed = message.embeds[0];
+        const field = embed.fields?.filter((field) => field.name === 'Participants')[0];
+
+        if (field) {
+            field.value = field.value?.replace(`- ${user.firstName} ${user.lastName}`, '');
+        }
+
+        await fetch(`https://discord.com/api/v8/channels/${body.channel_id}/messages/${body.message?.id}`, {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
+            },
+            body: JSON.stringify({
+                embeds: [embed],
+            }),
+        });
+        return { content: 'Vous avez été retiré de la séance.' };
+    }
+}
+
+export async function button_handler(body: DiscordInteraction): Promise<APIGatewayProxyResult | void> {
     const { data } = body;
     const { custom_id } = data as DiscordMessageComponentData;
+
+    await deferResponse(body, true);
+    const user = await getUser(body.member?.user.id as string).catch(() => undefined);
+    if (!user) {
+        await editResponse(body, USER_NOT_FOUND_RESPONSE);
+        return;
+    }
 
     if (custom_id === 'register') {
         const response: DiscordInteractionResponse = {
@@ -226,17 +318,7 @@ export function button_handler(body: DiscordInteraction): APIGatewayProxyResult 
             body: JSON.stringify(response),
         };
     } else if (custom_id === 'leave') {
-        const response: DiscordInteractionResponse = {
-            type: DiscordInteractionResponseType.ChannelMessageWithSource,
-            data: {
-                content: 'leave button clicked',
-                flags: DiscordInteractionFlags.Ephemeral,
-            },
-        };
-
-        return {
-            statusCode: 200,
-            body: JSON.stringify(response),
-        };
+        const response = await leaving_button_handler(body, user);
+        await editResponse(body, response);
     }
 }

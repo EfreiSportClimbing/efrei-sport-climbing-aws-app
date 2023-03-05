@@ -32,7 +32,7 @@ export type DiscordMessage = {
     mention_roles: string[];
     mention_channels: string[];
     attachments: string[];
-    embeds: string[];
+    embeds: DiscordEmbed[];
     reactions?: string[];
     nonce?: string | number;
     pinned: boolean;

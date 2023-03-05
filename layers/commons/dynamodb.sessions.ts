@@ -1,4 +1,7 @@
 import {
+    BatchGetItemCommand,
+    BatchWriteItemCommand,
+    DeleteItemCommand,
     DynamoDBClient,
     GetItemCommand,
     PutItemCommand,
@@ -11,7 +14,7 @@ const client = new DynamoDBClient({ region: 'eu-west-3' });
 
 export async function getSession(id: string): Promise<Session> {
     const { Item } = await client.send(
-        new GetItemCommand({ TableName: 'Efrei-Sport-Climbing-App.sessions', Key: { id: { S: id } } }),
+        new GetItemCommand({ TableName: 'Efrei-Sport-Climbing-App.sessions', Key: { id: { S: id }, sortId: { S: id } } }),
     );
     if (!Item) {
         throw new Error('Session not found');
@@ -19,7 +22,6 @@ export async function getSession(id: string): Promise<Session> {
     const session = {
         id: Item.id.S as string,
         date: new Date(parseInt(Item.date.N as string)),
-        participants: Item.participants.SS as string[],
         location: Item.location.S as string,
     };
     return session;
@@ -39,7 +41,7 @@ export async function findSession(date: Date, location: string): Promise<Session
             '#isExpired': 'isExpired',
         },
         FilterExpression: '#date = :date AND #location = :location AND #isExpired = :isExpired',
-        ProjectionExpression: '#id, #date, participants, #location',
+        ProjectionExpression: '#id, #date, #location',
         TableName: 'Efrei-Sport-Climbing-App.sessions',
         Limit: 1,
     };
@@ -51,53 +53,124 @@ export async function findSession(date: Date, location: string): Promise<Session
     const session = {
         id: Item?.id.S as string,
         date: new Date(Item?.date.S as string),
-        participants: Item?.participants.SS as string[],
         location: Item?.location.S as string,
     };
     return session;
 }
 
-export async function putSession(userInput: Session): Promise<void> {
+export async function putSession(sessionInput: Session, participants:string[]): Promise<void> {
+    const expirationDate = new Date(sessionInput.date.getTime() + 24 * 60 * 60 * 1000);
+    expirationDate.setHours(0, 0, 0, 0);
+    const sessionItem = {
+            id: { S: sessionInput.id },
+            sortId: { S: sessionInput.id },
+            date: { N: sessionInput.date.getTime().toString() },
+            location: { S: sessionInput.location },
+            expiresAt: { N: sessionInput.date.getTime().toString()},
+            isExpired: { BOOL: false},
+    };
+    const userItems = participants.map((participant) => {
+            return { 
+                id: { S: sessionInput.id },
+                sortId: { S: participant },
+            }
+    });
+    await client.send( new BatchWriteItemCommand(
+        { RequestItems: {
+            "Efrei-Sport-Climbing-App.sessions": [
+                {
+                    PutRequest: {
+                        Item: sessionItem
+                    }
+                },
+                ...userItems.map((item) => {
+                    return {
+                        PutRequest: {
+                            Item: item
+                        }
+                    }
+                })
+            ],
+        } },
+    ))
+}
+
+export async function deleteSession(id: string): Promise<void> {
+    const params = {
+        ExpressionAttributeValues: {
+            ':id': { S: id },
+        },
+        ExpressionAttributeNames: {
+            '#id': 'id',
+            '#sortId': 'sortId',
+        },
+        FilterExpression: '#id = :id',
+        ProjectionExpression: '#id, #sortId',
+        TableName: 'Efrei-Sport-Climbing-App.sessions',
+    };
+    const { Items, Count } = await client.send(new ScanCommand(params));
+    if (Count === 0) {
+        throw new Error('Session not found');
+    }
     await client.send(
-        new PutItemCommand({
+        new BatchWriteItemCommand({
+            RequestItems: {
+                'Efrei-Sport-Climbing-App.sessions': Items?.map((item) => {
+                    return {
+                        DeleteRequest: {
+                            Key: {
+                                id: item.id,
+                                sortId: item.sortId,
+                            },
+                        },
+                    }}) || [],
+                }
+            }
+        )
+    );
+}
+
+export async function expireSession(id: string): Promise<void> {
+    await client.send(
+        new UpdateItemCommand({
             TableName: 'Efrei-Sport-Climbing-App.sessions',
-            Item: {
-                id: { S: userInput.id },
-                date: { N: userInput.date.getTime().toString() },
-                participants: { SS: userInput.participants },
-                location: { S: userInput.location },
-                expiresAt: { N: (userInput.date.setHours(0) + 24 * 60 * 60 * 1000).toString()},
-                isExpired: { BOOL: false},
+            Key: { id: { S: id }, sortId: { S: id } },
+            AttributeUpdates: {
+                isExpired: {
+                    Action: 'PUT',
+                    Value: { BOOL: true },
+                },
             },
         }),
     );
 }
 
 export async function addUserToSession(id: string, idUser: string): Promise<void> {
-    await client.send(
-        new UpdateItemCommand({
-            TableName: 'Efrei-Sport-Climbing-App.sessions',
-            Key: { id: { S: id } },
-            AttributeUpdates: {
-                participants: {
-                    Action: 'ADD',
-                    Value: { SS: [idUser] },
+    try {
+        await client.send(
+            new PutItemCommand({
+                TableName: 'Efrei-Sport-Climbing-App.sessions',
+                Item: {
+                    id: { S: id },
+                    sortId: { S: idUser },
                 },
-            },
-        }),
-    );
+            }),
+        );
+    } catch (err: any) {
+        if (err?.name === 'ConditionalCheckFailedException') {
+            throw new Error('User already in session');
+        }
+        throw err;
+    }
 }
 
 export async function removeUserFromSession(id: string, idUser: string): Promise<void> {
     await client.send(
-        new UpdateItemCommand({
+        new DeleteItemCommand({
             TableName: 'Efrei-Sport-Climbing-App.sessions',
-            Key: { id: { S: id } },
-            AttributeUpdates: {
-                participants: {
-                    Action: 'DELETE',
-                    Value: { SS: [idUser] },
-                },
+            Key: {
+                id: { S: id },
+                sortId: { S: idUser },
             },
         }),
     );
@@ -117,32 +190,69 @@ export async function listSessionsExpired(): Promise<Session[]> {
             '#expiresAt': 'expiresAt',
         },
         FilterExpression: '#expiresAt < :now AND #isExpired = :isExpired',
-        ProjectionExpression: '#id, #date, participants, #location, #isExpired, #expiresAt',
+        ProjectionExpression: '#id, #date, #location',
         TableName: 'Efrei-Sport-Climbing-App.sessions',
     };
     const { Items } = await client.send(new ScanCommand(params));
     const sessions = Items?.map((Item) => ({
         id: Item?.id.S as string,
         date: new Date(Item?.date.S as string),
-        participants: Item?.participants.SS as string[],
         location: Item?.location.S as string,
-        isExpired: Item?.isExpired.BOOL as boolean,
-        expiresAt: new Date(parseInt(Item?.expiresAt.N as string)),
     }));
     return sessions || [];
 }
 
-export async function expireSession(id: string): Promise<void> {
-    await client.send(
-        new UpdateItemCommand({
-            TableName: 'Efrei-Sport-Climbing-App.sessions',
-            Key: { id: { S: id } },
-            AttributeUpdates: {
-                isExpired: {
-                    Action: 'PUT',
-                    Value: { BOOL: true },
-                },
-            },
-        }),
-    );
+export async function countSessionsWithUser(idUser: string, from:Date|undefined, to:Date|undefined): Promise<Number> {
+    const params = {
+        ExpressionAttributeValues: {
+            ':idUser': { S: idUser },
+        },
+        ExpressionAttributeNames: {
+            '#id': 'id',
+            '#sortId': 'sortId',
+        },
+        FilterExpression: '#sortId = :idUser',
+        ProjectionExpression: '#id, #sortId',
+        TableName: 'Efrei-Sport-Climbing-App.sessions',
+    };
+    const { Items, Count } = await client.send(new ScanCommand(params));
+    if (from && to) {
+        const sessionsItems = Items?.map((Item) => ({
+            id: {S:Item?.id.S as string},
+            sortId: {S:Item?.id.S as string},
+        }));
+        const data = await client.send(new BatchGetItemCommand({
+            RequestItems: {
+                "Efrei-Sport-Climbing-App.sessions": {
+                    Keys: sessionsItems,
+                    ProjectionExpression: '#id, #date, #location, #isExpired, #expiresAt',
+                    ExpressionAttributeNames: {
+                        '#id': 'id',
+                        '#date': 'date',
+                        '#location': 'location',
+                    },
+                }
+            }
+        }));
+        const sessions = data.Responses?.["Efrei-Sport-Climbing-App.sessions"]?.filter((session: any) => from.getTime() <= parseInt(session.date.N) && parseInt(session.date.N) <= to.getTime());
+        return sessions?.length || 0;
+    }
+    return Count || 0;
+}
+
+export async function countParticipants(id: string): Promise<Number> {
+    const params = {
+        ExpressionAttributeValues: {
+            ':id': { S: id },
+        },
+        ExpressionAttributeNames: {
+            '#id': 'id',
+            '#sortId': 'sortId',
+        },
+        FilterExpression: '#id = :id AND #sortId <> :id',
+        ProjectionExpression: '#id, #sortId',
+        TableName: 'Efrei-Sport-Climbing-App.sessions',
+    };
+    const { Count } = await client.send(new ScanCommand(params));
+    return Count || 0;
 }
