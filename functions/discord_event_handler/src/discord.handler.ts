@@ -17,9 +17,11 @@ import {
 } from 'commons/discord.types';
 import { getUser, putUser } from 'commons/dynamodb.users';
 import {
+    addUserToSession,
     countParticipants,
     deleteSession,
     findSession,
+    getSession,
     putSession,
     removeUserFromSession,
 } from 'commons/dynamodb.sessions';
@@ -94,7 +96,7 @@ export async function create_seance(
         fields: [
             {
                 name: `Participants :`,
-                value: `- ${user.firstName} ${user.lastName}`,
+                value: `- ${user.firstName} ${user.lastName}\n`,
                 inline: false,
             },
         ],
@@ -251,7 +253,15 @@ export async function leaving_button_handler(body: DiscordInteraction, user: Use
             content: "Vous n'êtes pas inscrit à cette séance",
         };
     }
-
+    const session = await getSession(message?.id as string).catch((err) => {
+        console.log(err);
+        return;
+    });
+    if (!session) {
+        return {
+            content: "Cette séance n'existe plus",
+        };
+    }
     const nbParticipants = await countParticipants(message?.id as string);
     if (nbParticipants === 0) {
         await deleteSession(body.message?.id as string);
@@ -274,22 +284,83 @@ export async function leaving_button_handler(body: DiscordInteraction, user: Use
             },
         ).then((res) => res.json())) as DiscordMessage;
         const embed = message.embeds[0];
-        const field = embed.fields?.filter((field) => field.name === 'Participants')[0];
+        const location = session.location;
+        const field = embed.fields?.filter((field) => field.name === 'Participants :')[0];
+        embed.thumbnail = { url: `attachment://${location}.png` };
 
         if (field) {
             field.value = field.value?.replace(`- ${user.firstName} ${user.lastName}`, '');
+            field.value = field.value?.replace('\n\n', '\n');
         }
 
         await fetch(`https://discord.com/api/v8/channels/${body.channel_id}/messages/${body.message?.id}`, {
             method: 'PATCH',
             headers: {
                 Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
+                'Content-Type': 'application/json',
             },
             body: JSON.stringify({
                 embeds: [embed],
             }),
         });
         return { content: 'Vous avez été retiré de la séance.' };
+    }
+}
+
+export async function register_button_handler(body: DiscordInteraction, user: User): Promise<DiscordMessagePost> {
+    const { message } = body;
+    const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
+
+    try {
+        await addUserToSession(message?.id as string, user.id as string);
+    } catch (err: any) {
+        return {
+            content: 'Vous êtes déjà inscrit à cette séance',
+        };
+    }
+    const session = await getSession(message?.id as string).catch((err) => {
+        console.log(err);
+        return;
+    });
+
+    if (!session) {
+        return {
+            content: "Cette séance n'existe plus",
+        };
+    } else {
+        const message = (await fetch(
+            `https://discord.com/api/v8/channels/${body.channel_id}/messages/${body.message?.id}`,
+            {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
+                },
+            },
+        ).then((res) => res.json())) as DiscordMessage;
+        const embed = message.embeds[0];
+        const location = session.location;
+        const field = embed.fields?.filter((field) => field.name === 'Participants :')[0];
+        embed.thumbnail = { url: `attachment://${location}.png` };
+
+        if (field) {
+            field.value = `${field.value}\n - ${user.firstName} ${user.lastName}\n`;
+            field.value = field.value?.replace('\n\n', '\n');
+        } else {
+            return {
+                content: "Une erreur s'est produite",
+            };
+        }
+        await fetch(`https://discord.com/api/v8/channels/${body.channel_id}/messages/${body.message?.id}`, {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+                embeds: [embed],
+            } as DiscordMessagePost),
+        });
+        return { content: 'Vous avez été ajouté à la séance.' };
     }
 }
 
@@ -305,18 +376,8 @@ export async function button_handler(body: DiscordInteraction): Promise<APIGatew
     }
 
     if (custom_id === 'register') {
-        const response: DiscordInteractionResponse = {
-            type: DiscordInteractionResponseType.ChannelMessageWithSource,
-            data: {
-                content: 'register button clicked',
-                flags: DiscordInteractionFlags.Ephemeral,
-            },
-        };
-
-        return {
-            statusCode: 200,
-            body: JSON.stringify(response),
-        };
+        const response = await register_button_handler(body, user);
+        await editResponse(body, response);
     } else if (custom_id === 'leave') {
         const response = await leaving_button_handler(body, user);
         await editResponse(body, response);
