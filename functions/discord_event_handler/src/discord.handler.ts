@@ -180,10 +180,19 @@ export async function seance_handlher(body: DiscordInteraction, user: User): Pro
     });
 
     if (session) {
-        const message: DiscordMessagePost = {
-            content: 'Cette séance existe déjà !',
-        };
-        await editResponse(body, message);
+        const message = await fetch(
+            `https://discord.com/api/v8/channels/${CHANNELS[location]}/messages/${session.id}`,
+            {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+                },
+            },
+        )
+            .then((res) => res.json())
+            .then((res) => res as DiscordMessage);
+        const res = await add_to_session_handler(message, user);
+        await editResponse(body, res);
     } else {
         const response = await create_seance(user, member as DiscordGuildMember, date, location);
         await editResponse(body, response);
@@ -242,7 +251,7 @@ export async function command_handler(body: DiscordInteraction): Promise<APIGate
     }
 }
 
-export async function leaving_button_handler(body: DiscordInteraction, user: User): Promise<DiscordMessagePost> {
+export async function remove_from_session_handler(body: DiscordInteraction, user: User): Promise<DiscordMessagePost> {
     const { message } = body;
     const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
 
@@ -307,8 +316,7 @@ export async function leaving_button_handler(body: DiscordInteraction, user: Use
     }
 }
 
-export async function register_button_handler(body: DiscordInteraction, user: User): Promise<DiscordMessagePost> {
-    const { message } = body;
+export async function add_to_session_handler(message: DiscordMessage, user: User): Promise<DiscordMessagePost> {
     const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
 
     try {
@@ -328,17 +336,8 @@ export async function register_button_handler(body: DiscordInteraction, user: Us
             content: "Cette séance n'existe plus",
         };
     } else {
-        const message = (await fetch(
-            `https://discord.com/api/v8/channels/${body.channel_id}/messages/${body.message?.id}`,
-            {
-                method: 'GET',
-                headers: {
-                    Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
-                },
-            },
-        ).then((res) => res.json())) as DiscordMessage;
-        const embed = message.embeds[0];
         const location = session.location;
+        const embed = message.embeds[0];
         const field = embed.fields?.filter((field) => field.name === 'Participants :')[0];
         embed.thumbnail = { url: `attachment://${location}.png` };
 
@@ -350,7 +349,7 @@ export async function register_button_handler(body: DiscordInteraction, user: Us
                 content: "Une erreur s'est produite",
             };
         }
-        await fetch(`https://discord.com/api/v8/channels/${body.channel_id}/messages/${body.message?.id}`, {
+        await fetch(`https://discord.com/api/v8/channels/${CHANNELS[location]}/messages/${message.id}`, {
             method: 'PATCH',
             headers: {
                 Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
@@ -376,10 +375,10 @@ export async function button_handler(body: DiscordInteraction): Promise<APIGatew
     }
 
     if (custom_id === 'register') {
-        const response = await register_button_handler(body, user);
+        const response = await add_to_session_handler(body.message as DiscordMessage, user);
         await editResponse(body, response);
     } else if (custom_id === 'leave') {
-        const response = await leaving_button_handler(body, user);
+        const response = await remove_from_session_handler(body, user);
         await editResponse(body, response);
     }
 }
