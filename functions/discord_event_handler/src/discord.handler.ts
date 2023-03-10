@@ -19,6 +19,7 @@ import { getUser, putUser } from 'commons/dynamodb.users';
 import {
     addUserToSession,
     countParticipants,
+    countSessionsWithUser,
     deleteSession,
     findSession,
     getSession,
@@ -58,7 +59,7 @@ const generateDate = (day: string, hour: string) => {
     return date;
 };
 
-export async function create_seance(
+async function create_seance(
     user: User,
     member: DiscordGuildMember,
     date: Date,
@@ -163,7 +164,7 @@ export async function create_seance(
     };
 }
 
-export async function seance_handlher(body: DiscordInteraction, user: User): Promise<void> {
+async function seance_handlher(body: DiscordInteraction, user: User): Promise<DiscordMessagePost> {
     const { member } = body;
     const { data } = body;
     const { options } = data as DiscordApplicationCommandData;
@@ -174,28 +175,28 @@ export async function seance_handlher(body: DiscordInteraction, user: User): Pro
 
     const date = generateDate(day, hour);
 
-    const session = await findSession(date, location).catch((err) => {
-        console.log(err);
-        return;
+    const session = await findSession(date, location).catch(() => {
+        return undefined;
     });
 
     if (session) {
+        const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
         const message = await fetch(
             `https://discord.com/api/v8/channels/${CHANNELS[location]}/messages/${session.id}`,
             {
                 method: 'GET',
                 headers: {
-                    Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+                    Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
                 },
             },
         )
             .then((res) => res.json())
             .then((res) => res as DiscordMessage);
         const res = await add_to_session_handler(message, user);
-        await editResponse(body, res);
+        return res;
     } else {
         const response = await create_seance(user, member as DiscordGuildMember, date, location);
-        await editResponse(body, response);
+        return response;
     }
 }
 
@@ -226,6 +227,61 @@ async function inscription_handler(body: DiscordInteraction): Promise<APIGateway
     };
 }
 
+async function activity_handler(body: DiscordInteraction, user: User): Promise<DiscordMessagePost> {
+    const { options } = body.data as DiscordApplicationCommandData;
+
+    const month = parseInt(options?.find((option) => option.name === 'mois')?.value as string);
+
+    const today = new Date();
+
+    const from = new Date();
+    from.setMonth(month);
+    from.setHours(0, 0, 0, 0);
+
+    const to = new Date();
+    to.setMonth(month + 1);
+    to.setHours(0, 0, 0, 0);
+
+    if (from > today) {
+        from.setFullYear(today.getFullYear() - 1);
+        if (to.getMonth() !== 0) {
+            to.setFullYear(today.getFullYear() - 1);
+        }
+    }
+
+    const number = await countSessionsWithUser(user.id as string, from, to);
+
+    const fromString = from.toLocaleDateString('fr-FR', {
+        month: 'long',
+    });
+
+    const toString = to.toLocaleDateString('fr-FR', {
+        month: 'long',
+    });
+
+    const yearFromString = from.toLocaleDateString('fr-FR', {
+        year: 'numeric',
+    });
+
+    const yearToString = to.toLocaleDateString('fr-FR', {
+        year: 'numeric',
+    });
+
+    const response: DiscordMessagePost = {
+        content: `Vous avez participé à ${number} séances de grimpe de ${fromString} ${yearFromString} à ${toString} ${yearToString}.`,
+    };
+
+    return response;
+}
+
+async function helloasso_handler(body: DiscordInteraction, user: User): Promise<DiscordMessagePost> {
+    const response: DiscordMessagePost = {
+        content: `Votre identifiant HelloAsso est : ${user.id}`,
+    };
+
+    return response;
+}
+
 export async function command_handler(body: DiscordInteraction): Promise<APIGatewayProxyResult | void> {
     const { data, member } = body;
     const { name } = data as DiscordApplicationCommandData;
@@ -236,22 +292,24 @@ export async function command_handler(body: DiscordInteraction): Promise<APIGate
         await deferResponse(body, true);
         const user = await getUser(member?.user.id as string).catch(() => undefined);
         if (!user) {
-            await editResponse(body, USER_NOT_FOUND_RESPONSE);
-            return;
+            return await editResponse(body, USER_NOT_FOUND_RESPONSE);
         }
         if (name === 'activité') {
-            return void 0;
+            const res = await activity_handler(body, user);
+            return await editResponse(body, res);
         } else if (name === 'helloasso') {
-            return void 0;
+            const res = await helloasso_handler(body, user);
+            return await editResponse(body, res);
         } else if (name === 'séance') {
-            return await seance_handlher(body, user);
+            const res = await seance_handlher(body, user);
+            return await editResponse(body, res);
         } else if (name === 'relevé') {
             return void 0;
         }
     }
 }
 
-export async function remove_from_session_handler(body: DiscordInteraction, user: User): Promise<DiscordMessagePost> {
+async function remove_from_session_handler(body: DiscordInteraction, user: User): Promise<DiscordMessagePost> {
     const { message } = body;
     const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
 
@@ -316,7 +374,7 @@ export async function remove_from_session_handler(body: DiscordInteraction, user
     }
 }
 
-export async function add_to_session_handler(message: DiscordMessage, user: User): Promise<DiscordMessagePost> {
+async function add_to_session_handler(message: DiscordMessage, user: User): Promise<DiscordMessagePost> {
     const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
 
     try {

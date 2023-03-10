@@ -216,7 +216,7 @@ export async function listSessionsExpired(): Promise<Session[]> {
     return sessions || [];
 }
 
-export async function countSessionsWithUser(idUser: string, from: Date | undefined, to: Date | undefined): Promise<Number> {
+export async function countSessionsWithUser(idUser: string, from: Date | null = null, to: Date | null = null): Promise<Number> {
     const params = {
         ExpressionAttributeValues: {
             ':idUser': { S: idUser },
@@ -239,11 +239,10 @@ export async function countSessionsWithUser(idUser: string, from: Date | undefin
             RequestItems: {
                 "Efrei-Sport-Climbing-App.sessions": {
                     Keys: sessionsItems,
-                    ProjectionExpression: '#id, #date, #location, #isExpired, #expiresAt',
+                    ProjectionExpression: '#id, #date',
                     ExpressionAttributeNames: {
                         '#id': 'id',
                         '#date': 'date',
-                        '#location': 'location',
                     },
                 }
             }
