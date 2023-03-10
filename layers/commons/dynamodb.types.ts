@@ -3,7 +3,7 @@ export type User = {
     firstName: string;
     lastName: string;
     promo: string;
-    nbOfSeances: number;
+    nbOfSeances?: number;
 };
 
 export type Session = {

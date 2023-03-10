@@ -32,3 +32,23 @@ export async function editResponse(body: DiscordInteraction, message: DiscordMes
         },
     );
 }
+
+export async function editResponseWithFile(
+    body: DiscordInteraction,
+    message: DiscordMessagePost,
+    file: Blob,
+    filename: string,
+) {
+    const formData = new FormData();
+    message.attachments = [];
+    formData.append('payload_json', JSON.stringify(message));
+    formData.append('file[0]', file, filename);
+    const res = await fetch(
+        'https://discord.com/api/v8/webhooks/' + process.env.DISCORD_APP_ID + '/' + body.token + '/messages/@original',
+        {
+            method: 'PATCH',
+            body: formData,
+        },
+    );
+    console.log('res', res);
+}

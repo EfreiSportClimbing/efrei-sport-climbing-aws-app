@@ -216,7 +216,7 @@ export async function listSessionsExpired(): Promise<Session[]> {
     return sessions || [];
 }
 
-export async function countSessionsWithUser(idUser: string, from: Date | null = null, to: Date | null = null): Promise<Number> {
+export async function countSessionsWithUser(idUser: string, from: Date | null = null, to: Date | null = null): Promise<number> {
     const params = {
         ExpressionAttributeValues: {
             ':idUser': { S: idUser },
@@ -230,7 +230,7 @@ export async function countSessionsWithUser(idUser: string, from: Date | null = 
         TableName: 'Efrei-Sport-Climbing-App.sessions',
     };
     const { Items, Count } = await client.send(new ScanCommand(params));
-    if (from && to) {
+    if (from && to && Count) {
         const sessionsItems = Items?.map((Item) => ({
             id: { S: Item?.id.S as string },
             sortId: { S: Item?.id.S as string },

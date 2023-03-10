@@ -15,7 +15,7 @@ import {
     DiscordMessage,
     DiscordGuildMember,
 } from 'commons/discord.types';
-import { getUser, putUser } from 'commons/dynamodb.users';
+import { getUser, listUsers, putUser } from 'commons/dynamodb.users';
 import {
     addUserToSession,
     countParticipants,
@@ -29,8 +29,9 @@ import {
 import { User } from 'commons/dynamodb.types';
 import { getSecret } from 'commons/discord.secret';
 import { getImage } from './s3.images';
-import { editResponse, deferResponse } from './discord.interaction';
+import { editResponse, deferResponse, editResponseWithFile } from './discord.interaction';
 import { USER_NOT_FOUND_RESPONSE } from './discord.utils';
+import { stringify } from 'csv-stringify';
 
 const SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/discord_bot_token';
 const DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -39,6 +40,15 @@ const CHANNELS: { [key: string]: string } = {
     'climb-up': process.env.CLIMBUP_CHANNEL as string,
     arkose: process.env.ARKOSE_CHANNEL as string,
 };
+
+function streamToString(stream: any): Promise<string> {
+    const chunks: any[] = [];
+    return new Promise((resolve, reject) => {
+        stream.on('data', (chunk: any) => chunks.push(Buffer.from(chunk)));
+        stream.on('error', (err: any) => reject(err));
+        stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    });
+}
 
 const generateDate = (day: string, hour: string) => {
     //generate date from command
@@ -282,6 +292,61 @@ async function helloasso_handler(body: DiscordInteraction, user: User): Promise<
     return response;
 }
 
+async function statement_handler(body: DiscordInteraction): Promise<[DiscordMessagePost, Blob, string]> {
+    const { options } = body.data as DiscordApplicationCommandData;
+
+    const from = new Date(options?.find((option) => option.name === 'depuis')?.value as string);
+    const to = new Date(options?.find((option) => option.name === 'a')?.value as string);
+
+    const users = await listUsers();
+
+    for (const user of users) {
+        const number = await countSessionsWithUser(user.id as string, from, to);
+        user.nbOfSeances = number;
+    }
+
+    const data = users.map((user) => {
+        return [user.firstName, user.lastName, user.promo, user.nbOfSeances];
+    });
+    // create csv file with users
+    const formatedData = stringify(data, {
+        header: true,
+        columns: ['Prénom', 'Nom', 'Promo', 'Nombre de séances'],
+    });
+    // to string
+    const formatedDataString = await streamToString(formatedData);
+    const blob = new Blob([formatedDataString], { type: 'text/csv' });
+
+    const fromString = from.toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    });
+
+    const toString = to.toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    });
+
+    const response: DiscordMessagePost = {
+        content:
+            '__Voici le bilan des séances de grimpe :__\n\n' +
+            users
+                .sort((a, b) => (b.nbOfSeances as number) - (a.nbOfSeances as number))
+                .map(
+                    (user) =>
+                        `- **${user.firstName} ${user.lastName}** promo *${user.promo}* : **${
+                            user.nbOfSeances
+                        }** séance${(user.nbOfSeances as number) > 1 ? 's' : ''}`,
+                )
+                .join('\n') +
+            `\n\nEntre le **${fromString}** et le **${toString}**.`,
+    };
+
+    return [response, blob, `bilan_${fromString}_${toString}.csv`];
+}
+
 export async function command_handler(body: DiscordInteraction): Promise<APIGatewayProxyResult | void> {
     const { data, member } = body;
     const { name } = data as DiscordApplicationCommandData;
@@ -304,7 +369,8 @@ export async function command_handler(body: DiscordInteraction): Promise<APIGate
             const res = await seance_handlher(body, user);
             return await editResponse(body, res);
         } else if (name === 'relevé') {
-            return void 0;
+            const [res, file, filename] = await statement_handler(body);
+            return await editResponseWithFile(body, res, file, filename);
         }
     }
 }
