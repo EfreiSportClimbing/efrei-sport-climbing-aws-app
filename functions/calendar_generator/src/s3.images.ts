@@ -17,7 +17,7 @@ export async function getFile(path: string): Promise<Blob> {
     return await res.blob();
 }
 
-export async function updateFile(path: string, file: Blob): Promise<void> {
+export async function updateFile(path: string, file: string): Promise<void> {
     await client.send(
         new PutObjectCommand({
             Bucket: 'efrei-sport-climbing-app-data',

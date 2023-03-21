@@ -75,6 +75,9 @@ Resources:
       Environment:
         Variables:
           PUBLIC_KEY: f89f9764c9ce8ce28b688306bf9c996a686ce1de04e804091d52d602016fc77a
+          ANTREBLOC_CHANNEL: "1081991146697408534"
+          CLIMBUP_CHANNEL: "1081991172408487986"
+          ARKOSE_CHANNEL: "1081991215467200623"
       Policies: 
         - AmazonDynamoDBFullAccess
         - AWSSecretsManagerGetSecretValuePolicy:
@@ -113,6 +116,76 @@ Resources:
         Sourcemap: true
         EntryPoints:
         - app.ts
+  CalendarGeneratorFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: functions/calendar_generator/
+      Handler: app.lambdaHandler
+      Runtime: nodejs18.x
+      Architectures:
+      - arm64
+      Events:
+         Schedule:
+          Type: Schedule
+          Properties:
+            Schedule: 'cron(0 0 * * ? *)'
+            Name: CalendarGeneratorSchedule
+            Description: Schedule updating calendar in S3
+            Enabled: false
+      Policies: 
+        - AmazonDynamoDBFullAccess
+        - S3ReadPolicy:
+            BucketName: efrei-sport-climbing-app-data
+      Layers:
+        - !Ref LayerCommons
+    Metadata: # Manage esbuild properties
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        EntryPoints:
+          - app.ts
+        External:
+          - commons
+  TicketsRegistorFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: functions/tickets_registor/
+      Handler: app.lambdaHandler
+      Runtime: nodejs18.x
+      Architectures:
+      - arm64
+      Events:
+         S3Event:
+          Type: S3
+          Properties:
+            Bucket:
+              Ref: EfreiSportClimbingBucket     # This must be the name of an S3 bucket declared in the same template file
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                - Name: prefix      # or "suffix"
+                  Value: tickets/climb-up/
+                - Name: suffix
+                  Value: pdf
+      Policies: 
+        - AmazonDynamoDBFullAccess
+        - S3ReadPolicy:
+            BucketName: efrei-sport-climbing-app-data
+      Layers:
+        - !Ref LayerCommons
+    Metadata: # Manage esbuild properties
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        EntryPoints:
+          - app.ts
+        External:
+          - commons
   UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -139,6 +212,21 @@ Resources:
         - AttributeName: sortId
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
+  TicketsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Efrei-Sport-Climbing-App.tickets
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: date
+          AttributeType: N
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+        - AttributeName: date
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
   LayerCommons:
     Type: AWS::Serverless::LayerVersion
     Properties:
@@ -148,6 +236,12 @@ Resources:
       RetentionPolicy: Delete
     Metadata:
       BuildMethod: makefile
+  EfreiSportClimbingBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: efrei-sport-climbing-app-data
+      
 
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function

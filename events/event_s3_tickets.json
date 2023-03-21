@@ -1,0 +1,38 @@
+{
+    "Records": [
+        {
+            "eventVersion": "2.1",
+            "eventSource": "aws:s3",
+            "awsRegion": "eu-west-3",
+            "eventTime": "2023-03-20T23:40:13.088Z",
+            "eventName": "ObjectCreated:Put",
+            "userIdentity": {
+                "principalId": "A3EPNEJEL900B8"
+            },
+            "requestParameters": {
+                "sourceIPAddress": "93.29.253.35"
+            },
+            "responseElements": {
+                "x-amz-request-id": "9A6SV0KZDKX7GYXC",
+                "x-amz-id-2": "LqL3Cj2+GucqTsGFARXSmri6oMWW+Y0SXYyJjCXir6lkv1J2aZhJ64cHs7QNhSYJAkCmPaH8BOwvbBGQgabXsog95JL0uPrt"
+            },
+            "s3": {
+                "s3SchemaVersion": "1.0",
+                "configurationId": "f5477fa6-b5b0-46fd-84d9-fc25e0a7866b",
+                "bucket": {
+                    "name": "efrei-sport-climbing-app-data",
+                    "ownerIdentity": {
+                        "principalId": "A3EPNEJEL900B8"
+                    },
+                    "arn": "arn:aws:s3:::efrei-sport-climbing-app-data"
+                },
+                "object": {
+                    "key": "tickets/climb-up/Courrier+de%CC%81blocage+subvention.pdf",
+                    "size": 259636,
+                    "eTag": "dfb17c15e93a627a913b9667c2abeff0",
+                    "sequencer": "006418EEDD0F7F1968"
+                }
+            }
+        }
+    ]
+}

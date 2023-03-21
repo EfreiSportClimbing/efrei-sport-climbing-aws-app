@@ -10,6 +10,11 @@ const DUMMY_RESPONSE: APIGatewayProxyResult = {
         message: 'ok !',
     }),
 };
+const CHANNELS: { [key: string]: string } = {
+    antrebloc: process.env.ANTREBLOC_CHANNEL as string,
+    'climb-up': process.env.CLIMBUP_CHANNEL as string,
+    arkose: process.env.ARKOSE_CHANNEL as string,
+};
 
 /**
  *
@@ -26,7 +31,7 @@ export const lambdaHandler = async (): Promise<APIGatewayProxyResult> => {
     const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
 
     const deleteMessage = async (session: Session) =>
-        fetch(`https://discord.com/api/v8/channels/489476855657660436/messages/${session.id}`, {
+        fetch(`https://discord.com/api/v8/${CHANNELS[session.location]}//messages/${session.id}`, {
             method: 'DELETE',
             headers: {
                 Authorization: `Bot ${DISCORD_BOT_TOKEN}`,

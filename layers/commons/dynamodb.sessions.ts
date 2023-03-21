@@ -5,10 +5,12 @@ import {
     DynamoDBClient,
     GetItemCommand,
     PutItemCommand,
+    QueryCommand,
     ScanCommand,
     UpdateItemCommand,
 } from '@aws-sdk/client-dynamodb';
-import { Session } from './dynamodb.types';
+import { Session, User } from './dynamodb.types';
+import { listUsers } from './dynamodb.users';
 
 const client = new DynamoDBClient({ region: 'eu-west-3' });
 
@@ -213,6 +215,48 @@ export async function listSessionsExpired(): Promise<Session[]> {
         date: new Date(Item?.date.S as string),
         location: Item?.location.S as string,
     }));
+    return sessions || [];
+}
+
+export async function listSessionUnexpired(): Promise<Session[]> {
+    const params = {
+        ExpressionAttributeValues: {
+            ':isExpired': { BOOL: false },
+        },
+        ExpressionAttributeNames: {
+            '#isExpired': 'isExpired',
+        },
+        FilterExpression: '#isExpired = :isExpired',
+        TableName: 'Efrei-Sport-Climbing-App.sessions',
+    };
+    const { Items } = await client.send(new ScanCommand(params));
+    const users = await listUsers();
+    const sessions = [];
+    for (const Item of Items as any) {
+        const participantsId = await client.send(
+            new QueryCommand({
+                ExpressionAttributeValues: {
+                    ':id': { S: Item?.id.S as string },
+                },
+                ExpressionAttributeNames: {
+                    '#id': 'id',
+                    '#sortId': 'sortId',
+                },
+                KeyConditionExpression: '#id = :id',
+                ProjectionExpression: '#sortId',
+                TableName: 'Efrei-Sport-Climbing-App.sessions',
+            })
+        );
+        const participants = participantsId?.Items?.map((item) => 
+            users.find((user) => user.id === item?.sortId.S)
+        );
+        sessions.push({
+            id: Item?.id.S as string,
+            date: new Date(parseInt(Item.date.N as string)),
+            location: Item?.location.S as string,
+            participants: participants?.filter((participant) => participant !== undefined) as User[],
+        });
+    }
     return sessions || [];
 }
 

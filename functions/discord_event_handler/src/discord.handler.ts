@@ -28,7 +28,7 @@ import {
 } from 'commons/dynamodb.sessions';
 import { User } from 'commons/dynamodb.types';
 import { getSecret } from 'commons/discord.secret';
-import { getImage } from './s3.images';
+import { getFile } from './s3.images';
 import { editResponse, deferResponse, editResponseWithFile } from './discord.interaction';
 import { USER_NOT_FOUND_RESPONSE } from './discord.utils';
 import { stringify } from 'csv-stringify';
@@ -140,7 +140,7 @@ async function create_seance(
     headers.append('Authorization', `Bot ${DISCORD_BOT_TOKEN}`);
     const formData = new FormData();
     formData.append('payload_json', JSON.stringify(message));
-    const file = await getImage(`images/${location}.png`);
+    const file = await getFile(`images/${location}.png`);
     formData.append('files[0]', file);
 
     // make request at discord api to send a message to the channel with the file attachment
