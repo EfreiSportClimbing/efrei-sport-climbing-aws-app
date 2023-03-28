@@ -136,7 +136,7 @@ export async function deleteSession(id: string): Promise<void> {
 }
 
 export async function expireSession(id: string): Promise<void> {
-    await client.send(
+    const res = await client.send(
         new UpdateItemCommand({
             TableName: 'Efrei-Sport-Climbing-App.sessions',
             Key: { id: { S: id }, sortId: { S: id } },
@@ -148,6 +148,7 @@ export async function expireSession(id: string): Promise<void> {
             },
         }),
     );
+    console.log("res",JSON.stringify(res));
 }
 
 export async function addUserToSession(id: string, idUser: string): Promise<void> {

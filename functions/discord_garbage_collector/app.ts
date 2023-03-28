@@ -31,13 +31,12 @@ export const lambdaHandler = async (): Promise<APIGatewayProxyResult> => {
     const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
 
     const deleteMessage = async (session: Session) =>
-        fetch(`https://discord.com/api/v8/${CHANNELS[session.location]}//messages/${session.id}`, {
+        await fetch(`https://discord.com/api/v8/channels/${CHANNELS[session.location]}//messages/${session.id}`, {
             method: 'DELETE',
             headers: {
                 Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
             },
-        }).then((res) => (res.status == 204 ? expireSession(session.id) : console.log('error :', res)));
-
+        }).then(async (res) => (res.status == 204 ? await expireSession(session.id) : console.log('error :', res)));
     const promises = sessions.map((session) => deleteMessage(session));
     await Promise.all(promises);
 
