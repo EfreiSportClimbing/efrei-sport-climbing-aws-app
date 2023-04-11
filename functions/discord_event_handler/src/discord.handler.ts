@@ -38,7 +38,9 @@ const DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'sa
 const CHANNELS: { [key: string]: string } = {
     antrebloc: process.env.ANTREBLOC_CHANNEL as string,
     'climb-up': process.env.CLIMBUP_CHANNEL as string,
+    'climb-up-bordeaux': process.env.CLIMBUP_BORDEAUX_CHANNEL as string,
     arkose: process.env.ARKOSE_CHANNEL as string,
+    'vertical-art': process.env.VERTICAL_ART_CHANNEL as string,
 };
 
 function streamToString(stream: any): Promise<string> {
@@ -185,9 +187,7 @@ async function seance_handlher(body: DiscordInteraction, user: User): Promise<Di
 
     const date = generateDate(day, hour);
 
-    const session = await findSession(date, location).catch(() => {
-        return undefined;
-    });
+    const session = await findSession(date, location).catch(() => undefined);
 
     if (session) {
         const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
@@ -245,17 +245,19 @@ async function activity_handler(body: DiscordInteraction, user: User): Promise<D
     const today = new Date();
 
     const from = new Date();
-    from.setMonth(month);
+    from.setMonth(month, 1);
     from.setHours(0, 0, 0, 0);
 
     const to = new Date();
-    to.setMonth(month + 1);
+    to.setMonth(month + 1, 1);
     to.setHours(0, 0, 0, 0);
 
     if (from > today) {
         from.setFullYear(today.getFullYear() - 1);
         if (to.getMonth() !== 0) {
             to.setFullYear(today.getFullYear() - 1);
+        } else {
+            to.setFullYear(today.getFullYear());
         }
     }
 
@@ -369,6 +371,13 @@ export async function command_handler(body: DiscordInteraction): Promise<APIGate
             const res = await seance_handlher(body, user);
             return await editResponse(body, res);
         } else if (name === 'relevé') {
+            // check if user is admin
+            if (member)
+                if (member?.roles.find((role) => role === process.env.DISCORD_ROLE_ADMIN_ID) === undefined) {
+                    return await editResponse(body, {
+                        content: "Vous n'avez pas les droits pour effectuer cette action",
+                    });
+                }
             const [res, file, filename] = await statement_handler(body);
             return await editResponseWithFile(body, res, file, filename);
         }

@@ -7,6 +7,7 @@ import {
     PutItemCommand,
     QueryCommand,
     ScanCommand,
+    ScanCommandInput,
     UpdateItemCommand,
 } from '@aws-sdk/client-dynamodb';
 import { Session, User } from './dynamodb.types';
@@ -31,22 +32,35 @@ export async function getSession(id: string): Promise<Session> {
 
 export async function findSession(date: Date, location: string): Promise<Session> {
     const params = {
-        ExpressionAttributeValues: {
-            ':date': { N: date.getTime().toString() },
-            ':location': { S: location },
-            ':isExpired': { BOOL: false },
-        },
-        ExpressionAttributeNames: {
-            '#id': 'id',
-            '#date': 'date',
-            '#location': 'location',
-            '#isExpired': 'isExpired',
-        },
-        FilterExpression: '#date = :date AND #location = :location AND #isExpired = :isExpired',
-        ProjectionExpression: '#id, #date, #location',
         TableName: 'Efrei-Sport-Climbing-App.sessions',
-        Limit: 1,
-    };
+        ScanFilter: {
+            'location': {
+                
+                ComparisonOperator: 'EQ',
+                AttributeValueList: [
+                    {
+                        S: location,
+                    },
+                ],
+            },
+            'date': {
+                ComparisonOperator: 'EQ',
+                AttributeValueList: [
+                    {
+                        N: date.getTime().toString(),
+                    },
+                ],
+            },
+            'isExpired': {
+                ComparisonOperator: 'EQ',
+                AttributeValueList: [
+                    {
+                        BOOL: false,
+                    },
+                ],
+            }
+        },
+    } as ScanCommandInput;
     const { Items, Count } = await client.send(new ScanCommand(params));
     if (Count === 0) {
         throw new Error('Session not found');
@@ -68,7 +82,7 @@ export async function putSession(sessionInput: Session, participants: string[]):
         sortId: { S: sessionInput.id },
         date: { N: sessionInput.date.getTime().toString() },
         location: { S: sessionInput.location },
-        expiresAt: { N: sessionInput.date.getTime().toString() },
+        expiresAt: { N: expirationDate.getTime().toString() },
         isExpired: { BOOL: false },
     };
     const userItems = participants.map((participant) => {
