@@ -1,0 +1,10 @@
+version = 0.1
+[account_esc.deploy.parameters]
+stack_name = "Efrei-Sport-Climbing-App"
+resolve_s3 = true
+s3_prefix = "Efrei-Sport-Climbing-App"
+region = "eu-west-3"
+profile = "account_esc"
+capabilities = "CAPABILITY_NAMED_IAM"
+disable_rollback = true
+image_repositories = []

@@ -1,0 +1,63 @@
+{
+    "resource": "/discord-event-handler",
+    "path": "/discord-event-handler",
+    "httpMethod": "POST",
+    "headers": {
+        "content-type": "application/json",
+        "Host": "efrei-sport-climbing.live",
+        "User-Agent": "Discord-Interactions/1.0 (+https://discord.com)",
+        "X-Amzn-Trace-Id": "Root=1-64479272-29f7c7f976bdecb35eb1bd25",
+        "X-Forwarded-For": "35.227.62.178",
+        "X-Forwarded-Port": "443",
+        "X-Forwarded-Proto": "https",
+        "x-signature-ed25519": "69e4db1157c8e540152fd4cc5ace9370189d4218a50a9382ce238a94c156a10c37c31946324d0f3b8b1e074aa57a7e6df2f5b58e9e0c3d838744e2252fa96908",
+        "x-signature-timestamp": "1682412146"
+    },
+    "multiValueHeaders": {
+        "content-type": ["application/json"],
+        "Host": ["efrei-sport-climbing.live"],
+        "User-Agent": ["Discord-Interactions/1.0 (+https://discord.com)"],
+        "X-Amzn-Trace-Id": ["Root=1-64479272-29f7c7f976bdecb35eb1bd25"],
+        "X-Forwarded-For": ["35.227.62.178"],
+        "X-Forwarded-Port": ["443"],
+        "X-Forwarded-Proto": ["https"],
+        "x-signature-ed25519": ["69e4db1157c8e540152fd4cc5ace9370189d4218a50a9382ce238a94c156a10c37c31946324d0f3b8b1e074aa57a7e6df2f5b58e9e0c3d838744e2252fa96908"],
+        "x-signature-timestamp": ["1682412146"]
+    },
+    "queryStringParameters": null,
+    "multiValueQueryStringParameters": null,
+    "pathParameters": null,
+    "stageVariables": null,
+    "requestContext": {
+        "resourceId": "14oj1y",
+        "resourcePath": "/discord-event-handler",
+        "httpMethod": "POST",
+        "extendedRequestId": "D7PSAFFDCGYFSfA=",
+        "requestTime": "25/Apr/2023:08:42:26 +0000",
+        "path": "/discord-event-handler",
+        "accountId": "069545802036",
+        "protocol": "HTTP/1.1",
+        "stage": "Prod",
+        "domainPrefix": "efrei-sport-climbing",
+        "requestTimeEpoch": 1682412146901,
+        "requestId": "71f1ff50-2dc3-4320-a192-b60849074cf7",
+        "identity": {
+            "cognitoIdentityPoolId": null,
+            "accountId": null,
+            "cognitoIdentityId": null,
+            "caller": null,
+            "sourceIp": "35.227.62.178",
+            "principalOrgId": null,
+            "accessKey": null,
+            "cognitoAuthenticationType": null,
+            "cognitoAuthenticationProvider": null,
+            "userArn": null,
+            "userAgent": "Discord-Interactions/1.0 (+https://discord.com)",
+            "user": null
+        },
+        "domainName": "efrei-sport-climbing.live",
+        "apiId": "bvm159wvd7"
+    },
+    "body": "{\"app_permissions\":\"140737488355327\",\"application_id\":\"1071807223044513822\",\"channel\":{\"flags\":0,\"guild_id\":\"714391758926118962\",\"id\":\"856166037913600081\",\"last_message_id\":\"1077209894177996820\",\"name\":\"test-bot\",\"nsfw\":false,\"parent_id\":\"752456053287026701\",\"permissions\":\"140737488355327\",\"position\":20,\"rate_limit_per_user\":0,\"topic\":null,\"type\":0},\"channel_id\":\"856166037913600081\",\"data\":{\"guild_id\":\"714391758926118962\",\"id\":\"1091339818081984515\",\"name\":\"relevé\",\"options\":[{\"name\":\"depuis\",\"type\":3,\"value\":\"03-25-2023\"},{\"name\":\"a\",\"type\":3,\"value\":\"04-25-2023\"}],\"type\":1},\"entitlement_sku_ids\":[],\"entitlements\":[],\"guild_id\":\"714391758926118962\",\"guild_locale\":\"fr\",\"id\":\"1100341036133384243\",\"locale\":\"fr\",\"member\":{\"avatar\":null,\"communication_disabled_until\":null,\"deaf\":false,\"flags\":0,\"is_pending\":false,\"joined_at\":\"2021-09-03T18:22:39.183000+00:00\",\"mute\":false,\"nick\":\"[Président] Paul Mairesse\",\"pending\":false,\"permissions\":\"140737488355327\",\"premium_since\":null,\"roles\":[\"714392325673189416\",\"752444499795640360\"],\"user\":{\"avatar\":\"99e493f6450b470bde3229de275d1487\",\"avatar_decoration\":null,\"discriminator\":\"8065\",\"display_name\":null,\"global_name\":null,\"id\":\"315852341620244491\",\"public_flags\":4194432,\"username\":\"Poool\"}},\"token\":\"aW50ZXJhY3Rpb246MTEwMDM0MTAzNjEzMzM4NDI0MzpVNW9yYkFPaHdFM0Q4eHJSRWl5NlhLaDVQSDJCVnYzNXN0TVlINzBiRU9vTFJLR0FUQnBOMFlnbjJsNUJVaFZSUDdjdmZDWldzTzZSdjZvV204b0F0VHE4ZERKTjlzdERDU1JQWWJ4VnBwbGNBT2lrTFhWd3VJMTcxcW5yN2R2Sg\",\"type\":2,\"version\":1}",
+    "isBase64Encoded": false
+}
