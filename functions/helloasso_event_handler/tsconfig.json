@@ -1,15 +1,22 @@
 {
     "compilerOptions": {
-      "target": "es2020",
-      "strict": true,
-      "preserveConstEnums": true,
-      "noEmit": true,
-      "sourceMap": false,
-      "module":"es2015",
-      "moduleResolution":"node",
-      "esModuleInterop": true, 
-      "skipLibCheck": true,
-      "forceConsistentCasingInFileNames": true,  
+        "target": "es2020",
+        "strict": true,
+        "preserveConstEnums": true,
+        "noEmit": true,
+        "sourceMap": false,
+        "module": "es2015",
+        "moduleResolution": "node",
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "baseUrl": ".",
+        "paths": {
+            "commons/*": ["../../layers/commons/*"] //TODO: remove this line when building the project for production
+        }
     },
-    "exclude": ["node_modules", "**/*.test.ts"]
-  }
+    "exclude": ["node_modules", "**/*.test.ts"],
+    "scripts": {
+        "postbuild": "cd dist && rm -r ./layers && echo 'Removed ./layers folder from dist'"
+    }
+}

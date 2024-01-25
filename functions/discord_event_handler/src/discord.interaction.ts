@@ -43,12 +43,11 @@ export async function editResponseWithFile(
     message.attachments = [];
     formData.append('payload_json', JSON.stringify(message));
     formData.append('file[0]', file, filename);
-    const res = await fetch(
+    await fetch(
         'https://discord.com/api/v8/webhooks/' + process.env.DISCORD_APP_ID + '/' + body.token + '/messages/@original',
         {
             method: 'PATCH',
             body: formData,
         },
     );
-    console.log('res', res);
 }

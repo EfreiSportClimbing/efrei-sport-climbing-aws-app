@@ -1,6 +1,6 @@
 import { APIGatewayProxyResult } from 'aws-lambda';
 import { expireSession, listSessionsExpired } from 'commons/dynamodb.sessions';
-import { getSecret } from 'commons/discord.secret';
+import { getSecret } from 'commons/aws.secret';
 import { Session } from 'commons/dynamodb.types';
 
 const SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/discord_bot_token';

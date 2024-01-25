@@ -3,6 +3,7 @@ Transform: AWS::Serverless-2016-10-31
 Description: |
   efrei-sport-climbing-aws-app
   Sample SAM Template for efrei-sport-climbing-aws-app
+
 Globals:
   Function:
     Timeout: 3
@@ -110,6 +111,8 @@ Resources:
           Properties:
             Path: /helloasso-event-handler
             Method: post
+      Layers:
+        - !Ref LayerCommons
     Metadata:
       BuildMethod: esbuild
       BuildProperties:
@@ -118,6 +121,8 @@ Resources:
         Sourcemap: true
         EntryPoints:
           - app.ts
+        External:
+          - commons
   TicketsRegistorFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -215,7 +220,6 @@ Resources:
     Properties:
       Name: Efrei-Sport-Climbing-App/secrets/discord_bot_token
       Description: Discord Bot Token
-      SecretString: ${file(./secrets/discord_bot_token.secret)}
   UsersTableBackupPlan:
     Type: AWS::Backup::BackupPlan
     Properties:

@@ -27,7 +27,7 @@ import {
     removeUserFromSession,
 } from 'commons/dynamodb.sessions';
 import { User } from 'commons/dynamodb.types';
-import { getSecret } from 'commons/discord.secret';
+import { getSecret } from 'commons/aws.secret';
 import { getFile } from './s3.images';
 import { editResponse, deferResponse, editResponseWithFile } from './discord.interaction';
 import { USER_NOT_FOUND_RESPONSE } from './discord.utils';
@@ -331,19 +331,26 @@ async function statement_handler(body: DiscordInteraction): Promise<[DiscordMess
         year: 'numeric',
     });
 
+    let text_message =
+        '__Voici le bilan des séances de grimpe :__\n\n' +
+        users
+            .sort((a, b) => (b.nbOfSeances as number) - (a.nbOfSeances as number))
+            .map(
+                (user) =>
+                    `- **${user.firstName} ${user.lastName}** promo *${user.promo}* : **${user.nbOfSeances}** séance${
+                        (user.nbOfSeances as number) > 1 ? 's' : ''
+                    }`,
+            )
+            .join('\n') +
+        `\n\nEntre le **${fromString}** et le **${toString}**.`;
+
+    // check if text message is too long
+    if (text_message.length > 2000) {
+        text_message = 'Le message est trop long, veuillez consulter le fichier ci-dessous.';
+    }
+
     const response: DiscordMessagePost = {
-        content:
-            '__Voici le bilan des séances de grimpe :__\n\n' +
-            users
-                .sort((a, b) => (b.nbOfSeances as number) - (a.nbOfSeances as number))
-                .map(
-                    (user) =>
-                        `- **${user.firstName} ${user.lastName}** promo *${user.promo}* : **${
-                            user.nbOfSeances
-                        }** séance${(user.nbOfSeances as number) > 1 ? 's' : ''}`,
-                )
-                .join('\n') +
-            `\n\nEntre le **${fromString}** et le **${toString}**.`,
+        content: text_message,
     };
 
     return [response, blob, `bilan_${fromString}_${toString}.csv`];
@@ -352,7 +359,6 @@ async function statement_handler(body: DiscordInteraction): Promise<[DiscordMess
 export async function command_handler(body: DiscordInteraction): Promise<APIGatewayProxyResult | void> {
     const { data, member } = body;
     const { name } = data as DiscordApplicationCommandData;
-
     if (name === 'inscription') {
         return await inscription_handler(body);
     } else {
@@ -475,7 +481,7 @@ async function add_to_session_handler(message: DiscordMessage, user: User): Prom
         embed.thumbnail = { url: `attachment://${location}.png` };
 
         if (field) {
-            field.value = `${field.value}\n - ${user.firstName} ${user.lastName}\n`;
+            field.value = `${field.value}\n- ${user.firstName} ${user.lastName}\n`;
             field.value = field.value?.replace('\n\n', '\n');
         } else {
             return {

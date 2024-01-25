@@ -9,18 +9,16 @@ import {
     ScanCommand,
     ScanCommandInput,
     UpdateItemCommand,
-} from '@aws-sdk/client-dynamodb';
-import { Session, User } from './dynamodb.types';
-import { listUsers } from './dynamodb.users';
+} from "@aws-sdk/client-dynamodb";
+import { Session, User } from "./dynamodb.types";
+import { listUsers } from "./dynamodb.users";
 
-const client = new DynamoDBClient({ region: 'eu-west-3' });
+const client = new DynamoDBClient({ region: "eu-west-3" });
 
 export async function getSession(id: string): Promise<Session> {
-    const { Item } = await client.send(
-        new GetItemCommand({ TableName: 'Efrei-Sport-Climbing-App.sessions', Key: { id: { S: id }, sortId: { S: id } } }),
-    );
+    const { Item } = await client.send(new GetItemCommand({ TableName: "Efrei-Sport-Climbing-App.sessions", Key: { id: { S: id }, sortId: { S: id } } }));
     if (!Item) {
-        throw new Error('Session not found');
+        throw new Error("Session not found");
     }
     const session = {
         id: Item.id.S as string,
@@ -32,38 +30,37 @@ export async function getSession(id: string): Promise<Session> {
 
 export async function findSession(date: Date, location: string): Promise<Session> {
     const params = {
-        TableName: 'Efrei-Sport-Climbing-App.sessions',
+        TableName: "Efrei-Sport-Climbing-App.sessions",
         ScanFilter: {
-            'location': {
-                
-                ComparisonOperator: 'EQ',
+            location: {
+                ComparisonOperator: "EQ",
                 AttributeValueList: [
                     {
                         S: location,
                     },
                 ],
             },
-            'date': {
-                ComparisonOperator: 'EQ',
+            date: {
+                ComparisonOperator: "EQ",
                 AttributeValueList: [
                     {
                         N: date.getTime().toString(),
                     },
                 ],
             },
-            'isExpired': {
-                ComparisonOperator: 'EQ',
+            isExpired: {
+                ComparisonOperator: "EQ",
                 AttributeValueList: [
                     {
                         BOOL: false,
                     },
                 ],
-            }
+            },
         },
     } as ScanCommandInput;
     const { Items, Count } = await client.send(new ScanCommand(params));
     if (Count === 0) {
-        throw new Error('Session not found');
+        throw new Error("Session not found");
     }
     const Item = Items?.[0];
     const session = {
@@ -89,140 +86,140 @@ export async function putSession(sessionInput: Session, participants: string[]):
         return {
             id: { S: sessionInput.id },
             sortId: { S: participant },
-        }
+        };
     });
-    await client.send(new BatchWriteItemCommand(
-        {
+    await client.send(
+        new BatchWriteItemCommand({
             RequestItems: {
                 "Efrei-Sport-Climbing-App.sessions": [
                     {
                         PutRequest: {
-                            Item: sessionItem
-                        }
+                            Item: sessionItem,
+                        },
                     },
                     ...userItems.map((item) => {
                         return {
                             PutRequest: {
-                                Item: item
-                            }
-                        }
-                    })
+                                Item: item,
+                            },
+                        };
+                    }),
                 ],
-            }
-        },
-    ))
+            },
+        })
+    );
 }
 
 export async function deleteSession(id: string): Promise<void> {
     const params = {
         ExpressionAttributeValues: {
-            ':id': { S: id },
+            ":id": { S: id },
         },
         ExpressionAttributeNames: {
-            '#id': 'id',
-            '#sortId': 'sortId',
+            "#id": "id",
+            "#sortId": "sortId",
         },
-        FilterExpression: '#id = :id',
-        ProjectionExpression: '#id, #sortId',
-        TableName: 'Efrei-Sport-Climbing-App.sessions',
+        FilterExpression: "#id = :id",
+        ProjectionExpression: "#id, #sortId",
+        TableName: "Efrei-Sport-Climbing-App.sessions",
     };
     const { Items, Count } = await client.send(new ScanCommand(params));
     if (Count === 0) {
-        throw new Error('Session not found');
+        throw new Error("Session not found");
     }
     await client.send(
         new BatchWriteItemCommand({
             RequestItems: {
-                'Efrei-Sport-Climbing-App.sessions': Items?.map((item) => {
-                    return {
-                        DeleteRequest: {
-                            Key: {
-                                id: item.id,
-                                sortId: item.sortId,
+                "Efrei-Sport-Climbing-App.sessions":
+                    Items?.map((item) => {
+                        return {
+                            DeleteRequest: {
+                                Key: {
+                                    id: item.id,
+                                    sortId: item.sortId,
+                                },
                             },
-                        },
-                    }
-                }) || [],
-            }
-        }
-        )
+                        };
+                    }) || [],
+            },
+        })
     );
 }
 
 export async function expireSession(id: string): Promise<void> {
     const res = await client.send(
         new UpdateItemCommand({
-            TableName: 'Efrei-Sport-Climbing-App.sessions',
+            TableName: "Efrei-Sport-Climbing-App.sessions",
             Key: { id: { S: id }, sortId: { S: id } },
             AttributeUpdates: {
                 isExpired: {
-                    Action: 'PUT',
+                    Action: "PUT",
                     Value: { BOOL: true },
                 },
             },
-        }),
+        })
     );
-    console.log("res",JSON.stringify(res));
+    console.log("expireSessionRequest", JSON.stringify(res));
 }
 
 export async function addUserToSession(id: string, idUser: string): Promise<void> {
     const { Item } = await client.send(
         new GetItemCommand({
-            TableName: 'Efrei-Sport-Climbing-App.sessions',
+            TableName: "Efrei-Sport-Climbing-App.sessions",
             Key: { id: { S: id }, sortId: { S: idUser } },
-        }),
+        })
     );
     if (Item) {
-        throw new Error('UserAlreadyRegisteredError');
+        throw new Error("UserAlreadyRegisteredError");
     }
     await client.send(
         new PutItemCommand({
-            TableName: 'Efrei-Sport-Climbing-App.sessions',
+            TableName: "Efrei-Sport-Climbing-App.sessions",
             Item: {
                 id: { S: id },
                 sortId: { S: idUser },
             },
-        }),
+        })
     );
 }
 
 export async function removeUserFromSession(id: string, idUser: string): Promise<void> {
     const { Item } = await client.send(
         new GetItemCommand({
-            TableName: 'Efrei-Sport-Climbing-App.sessions',
+            TableName: "Efrei-Sport-Climbing-App.sessions",
             Key: { id: { S: id }, sortId: { S: idUser } },
-        }),
+        })
     );
     if (!Item) {
-        throw new Error('UserNotRegisteredError');
+        throw new Error("UserNotRegisteredError");
     }
     await client.send(
         new DeleteItemCommand({
-            TableName: 'Efrei-Sport-Climbing-App.sessions',
+            TableName: "Efrei-Sport-Climbing-App.sessions",
             Key: {
                 id: { S: id },
                 sortId: { S: idUser },
             },
-        }),
+        })
     );
 }
 
 export async function listSessionsExpired(): Promise<Session[]> {
     const params = {
         ExpressionAttributeValues: {
-            ':now': { N: new Date().getTime().toString() },
-            ':isExpired': { BOOL: false },
+            ":now": { N: new Date().getTime().toString() },
+            ":isExpired": { BOOL: false },
         },
         ExpressionAttributeNames: {
-            '#id': 'id',
-            '#date': 'date',
-            '#location': 'location',
-            '#isExpired': 'isExpired',
-            '#expiresAt': 'expiresAt',
+            "#id": "id",
+            "#date": "date",
+            "#location": "location",
+            "#isExpired": "isExpired",
+            "#expiresAt": "expiresAt",
         },
-        FilterExpression: '#expiresAt < :now AND #isExpired = :isExpired',
-        ProjectionExpression: '#id, #date, #location',
-        TableName: 'Efrei-Sport-Climbing-App.sessions',
+        FilterExpression: "#expiresAt < :now AND #isExpired = :isExpired",
+        ProjectionExpression: "#id, #date, #location",
+        TableName: "Efrei-Sport-Climbing-App.sessions",
     };
     const { Items } = await client.send(new ScanCommand(params));
     const sessions = Items?.map((Item) => ({
@@ -236,13 +233,13 @@ export async function listSessionsExpired(): Promise<Session[]> {
 export async function listSessionUnexpired(): Promise<Session[]> {
     const params = {
         ExpressionAttributeValues: {
-            ':isExpired': { BOOL: false },
+            ":isExpired": { BOOL: false },
         },
         ExpressionAttributeNames: {
-            '#isExpired': 'isExpired',
+            "#isExpired": "isExpired",
         },
-        FilterExpression: '#isExpired = :isExpired',
-        TableName: 'Efrei-Sport-Climbing-App.sessions',
+        FilterExpression: "#isExpired = :isExpired",
+        TableName: "Efrei-Sport-Climbing-App.sessions",
     };
     const { Items } = await client.send(new ScanCommand(params));
     const users = await listUsers();
@@ -251,20 +248,18 @@ export async function listSessionUnexpired(): Promise<Session[]> {
         const participantsId = await client.send(
             new QueryCommand({
                 ExpressionAttributeValues: {
-                    ':id': { S: Item?.id.S as string },
+                    ":id": { S: Item?.id.S as string },
                 },
                 ExpressionAttributeNames: {
-                    '#id': 'id',
-                    '#sortId': 'sortId',
+                    "#id": "id",
+                    "#sortId": "sortId",
                 },
-                KeyConditionExpression: '#id = :id',
-                ProjectionExpression: '#sortId',
-                TableName: 'Efrei-Sport-Climbing-App.sessions',
+                KeyConditionExpression: "#id = :id",
+                ProjectionExpression: "#sortId",
+                TableName: "Efrei-Sport-Climbing-App.sessions",
             })
         );
-        const participants = participantsId?.Items?.map((item) => 
-            users.find((user) => user.id === item?.sortId.S)
-        );
+        const participants = participantsId?.Items?.map((item) => users.find((user) => user.id === item?.sortId.S));
         sessions.push({
             id: Item?.id.S as string,
             date: new Date(parseInt(Item.date.N as string)),
@@ -278,15 +273,15 @@ export async function listSessionUnexpired(): Promise<Session[]> {
 export async function countSessionsWithUser(idUser: string, from: Date | null = null, to: Date | null = null): Promise<number> {
     const params = {
         ExpressionAttributeValues: {
-            ':idUser': { S: idUser },
+            ":idUser": { S: idUser },
         },
         ExpressionAttributeNames: {
-            '#id': 'id',
-            '#sortId': 'sortId',
+            "#id": "id",
+            "#sortId": "sortId",
         },
-        FilterExpression: '#sortId = :idUser',
-        ProjectionExpression: '#id, #sortId',
-        TableName: 'Efrei-Sport-Climbing-App.sessions',
+        FilterExpression: "#sortId = :idUser",
+        ProjectionExpression: "#id, #sortId",
+        TableName: "Efrei-Sport-Climbing-App.sessions",
     };
     const { Items, Count } = await client.send(new ScanCommand(params));
     if (from && to && Count) {
@@ -294,18 +289,20 @@ export async function countSessionsWithUser(idUser: string, from: Date | null = 
             id: { S: Item?.id.S as string },
             sortId: { S: Item?.id.S as string },
         }));
-        const data = await client.send(new BatchGetItemCommand({
-            RequestItems: {
-                "Efrei-Sport-Climbing-App.sessions": {
-                    Keys: sessionsItems,
-                    ProjectionExpression: '#id, #date',
-                    ExpressionAttributeNames: {
-                        '#id': 'id',
-                        '#date': 'date',
+        const data = await client.send(
+            new BatchGetItemCommand({
+                RequestItems: {
+                    "Efrei-Sport-Climbing-App.sessions": {
+                        Keys: sessionsItems,
+                        ProjectionExpression: "#id, #date",
+                        ExpressionAttributeNames: {
+                            "#id": "id",
+                            "#date": "date",
+                        },
                     },
-                }
-            }
-        }));
+                },
+            })
+        );
         const sessions = data.Responses?.["Efrei-Sport-Climbing-App.sessions"]?.filter((session: any) => from.getTime() <= parseInt(session.date.N) && parseInt(session.date.N) <= to.getTime());
         return sessions?.length || 0;
     }
@@ -315,15 +312,15 @@ export async function countSessionsWithUser(idUser: string, from: Date | null = 
 export async function countParticipants(id: string): Promise<Number> {
     const params = {
         ExpressionAttributeValues: {
-            ':id': { S: id },
+            ":id": { S: id },
         },
         ExpressionAttributeNames: {
-            '#id': 'id',
-            '#sortId': 'sortId',
+            "#id": "id",
+            "#sortId": "sortId",
         },
-        FilterExpression: '#id = :id AND #sortId <> :id',
-        ProjectionExpression: '#id, #sortId',
-        TableName: 'Efrei-Sport-Climbing-App.sessions',
+        FilterExpression: "#id = :id AND #sortId <> :id",
+        ProjectionExpression: "#id, #sortId",
+        TableName: "Efrei-Sport-Climbing-App.sessions",
     };
     const { Count } = await client.send(new ScanCommand(params));
     return Count || 0;

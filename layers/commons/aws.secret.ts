@@ -1,22 +1,21 @@
-import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 
 const clientSMC = new SecretsManagerClient({
-    region: 'eu-west-3',
+    region: "eu-west-3",
 });
 
-function memoize(fn:Function): Function {
-    let cache:any = {};
-    return (...args:any[]) => {
-        let n = args[0];  // just taking one argument here
+function memoize(fn: Function): Function {
+    let cache: any = {};
+    return (...args: any[]) => {
+        let n = args[0]; // just taking one argument here
         if (n in cache) {
             return cache[n];
-        }
-        else {
+        } else {
             let result = fn(n);
             cache[n] = result;
             return result;
         }
-    }
+    };
 }
 
 const getSecretRequest = async (secretPath: string) => {
