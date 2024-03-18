@@ -3,7 +3,7 @@ import url from "url";
 
 let accessToken: string | null = null;
 
-async function getAccessToken(clientId: string, clientSecret: string) {
+export async function getAccessToken(clientId: string, clientSecret: string) {
     if (accessToken) {
         return accessToken;
     }
@@ -15,7 +15,10 @@ async function getAccessToken(clientId: string, clientSecret: string) {
         .post(`https://api.helloasso.com/oauth2/token`, body, {
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
         })
-        .then((response: any) => response.data.access_token)
+        .then((response: any) => {
+            accessToken = response.data.access_token;
+            return response.data.access_token;
+        })
         .catch((error: Error) => {
             throw error;
         });

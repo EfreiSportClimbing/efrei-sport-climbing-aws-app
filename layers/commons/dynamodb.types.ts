@@ -15,10 +15,11 @@ export type Session = {
 
 export type TicketFile = {
     id: string;
+    orderId?: string;
     url: string;
     sold: boolean;
     date: Date;
-}
+};
 
 export type Order = {
     id: string;
@@ -29,4 +30,4 @@ export type Order = {
     delivered: Date;
     refunded: Date;
     failed: Date;
-}
+};
