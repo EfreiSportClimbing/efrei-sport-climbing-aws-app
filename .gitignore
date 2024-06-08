@@ -213,3 +213,4 @@ $RECYCLE.BIN/
 # Ignore the secrets directory
 **/secrets/**
 **/*.secret
+events
