@@ -8,3 +8,14 @@ profile = "account_esc"
 capabilities = "CAPABILITY_NAMED_IAM"
 disable_rollback = true
 image_repositories = []
+
+[default.deploy.parameters]
+stack_name = "EfreiSportClimbingTest"
+resolve_s3 = true
+s3_prefix = "EfreiSportClimbingTest"
+region = "eu-west-3"
+profile = "default"
+confirm_changeset = true
+capabilities = "CAPABILITY_NAMED_IAM"
+disable_rollback = true
+image_repositories = []

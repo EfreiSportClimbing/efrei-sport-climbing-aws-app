@@ -12,7 +12,7 @@ export async function getAccessToken(clientId: string, clientSecret: string) {
     body.append("client_secret", clientSecret);
     body.append("grant_type", "client_credentials");
     return await axios
-        .post(`https://api.helloasso.com/oauth2/token`, body, {
+        .post(`https://api.helloasso-sandbox.com/oauth2/token`, body, {
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
         })
         .then((response: any) => {

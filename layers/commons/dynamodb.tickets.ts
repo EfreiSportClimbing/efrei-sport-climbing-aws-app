@@ -1,10 +1,10 @@
-import { DynamoDBClient, GetItemCommand, PutItemCommand, ScanCommand } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, GetItemCommand, PutItemCommand, ScanCommand, UpdateItemCommand, TransactWriteItemsCommand } from "@aws-sdk/client-dynamodb";
 import { TicketFile } from "./dynamodb.types";
 
 const client = new DynamoDBClient({ region: "eu-west-3" });
 
-export async function getTickets(id: string): Promise<TicketFile> {
-    const { Item } = await client.send(new GetItemCommand({ TableName: "Efrei-Sport-Climbing-App.tickets", Key: { id: { S: id } } }));
+export async function getTickets(id: string, orderId: string | null = null): Promise<TicketFile> {
+    const { Item } = await client.send(new GetItemCommand({ TableName: "Efrei-Sport-Climbing-App.tickets", Key: { id: { S: id }, orderId: { S: orderId || id } } }));
     if (!Item) {
         throw new Error("Ticket not found");
     }
@@ -69,6 +69,48 @@ export async function getUnsoldTicket(): Promise<TicketFile> {
     return ticket;
 }
 
+export async function getUnsoldTickets(number: number): Promise<TicketFile[]> {
+    let tickets: TicketFile[] = [];
+    let ExclusiveStartKey: any = undefined;
+
+    do {
+        const { Items, LastEvaluatedKey } = await client.send(
+            new ScanCommand({
+                TableName: "Efrei-Sport-Climbing-App.tickets",
+                FilterExpression: "sold = :false",
+                ExpressionAttributeValues: {
+                    ":false": { BOOL: false },
+                },
+                ExclusiveStartKey,
+            })
+        );
+
+        if (Items) {
+            const newTickets = Items.map((item: any) => ({
+                id: item.id.S as string,
+                url: item.url.S as string,
+                sold: item.sold.BOOL as boolean,
+                date: new Date(parseInt(item.date.N as string)),
+            }));
+            tickets.push(...newTickets);
+        }
+
+        if (tickets.length >= number) {
+            break;
+        }
+
+        ExclusiveStartKey = LastEvaluatedKey;
+    } while (ExclusiveStartKey);
+
+    if (tickets.length < number) {
+        throw new Error("Not enough unsold tickets available");
+    }
+
+    return tickets.slice(0, number);
+}
+
+// ! invalid function, should not be used and should be removed
+// ! Order is not a valid structure for tickets and are separate from tickets
 export async function getOrder(orderId: string): Promise<TicketFile | null> {
     const { Items } = await client.send(
         new ScanCommand({
@@ -99,21 +141,54 @@ export async function getOrder(orderId: string): Promise<TicketFile | null> {
     }
 }
 
+export async function fetchOrderExists(orderId: string): Promise<boolean> {
+    const { Items } = await client.send(
+        new ScanCommand({
+            TableName: "Efrei-Sport-Climbing-App.tickets",
+            FilterExpression: "orderId = :orderId",
+            ExpressionAttributeValues: {
+                ":orderId": { S: orderId },
+            },
+        })
+    );
+    if (!Items) {
+        throw new Error("Error fetching tickets");
+    }
+    return Items.length > 0;
+}
+
 export async function putOrder(orderId: string, ticketId: string): Promise<void> {
     const ticket = await getTickets(ticketId);
     if (ticket.sold) {
         throw new Error("Ticket already sold");
     }
     await client.send(
-        new PutItemCommand({
-            TableName: "Efrei-Sport-Climbing-App.tickets",
-            Item: {
-                id: { S: ticketId },
-                orderId: { S: orderId },
-                url: { S: ticket.url },
-                sold: { BOOL: true },
-                date: { N: ticket.date.getTime().toString() },
-            },
+        new TransactWriteItemsCommand({
+            TransactItems: [
+                {
+                    Put: {
+                        TableName: "Efrei-Sport-Climbing-App.tickets",
+                        Item: {
+                            id: { S: ticketId },
+                            orderId: { S: orderId },
+                            date: { N: new Date().getTime().toString() },
+                        },
+                    },
+                },
+                {
+                    Update: {
+                        TableName: "Efrei-Sport-Climbing-App.tickets",
+                        Key: {
+                            id: { S: ticketId },
+                            orderId: { S: ticketId },
+                        },
+                        UpdateExpression: "set sold = :sold",
+                        ExpressionAttributeValues: {
+                            ":sold": { BOOL: true },
+                        },
+                    },
+                },
+            ],
         })
     );
 }
