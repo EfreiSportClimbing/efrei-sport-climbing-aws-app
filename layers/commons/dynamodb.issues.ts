@@ -41,12 +41,17 @@ export async function listIssues(
             ExpressionAttributeNames: {
                 "#status": "status",
             },
-            FilterExpression: open_only ? "#status = :open" : undefined,
-            ExpressionAttributeValues: open_only ? { ":open": { S: IssueStatus.OPEN } } : undefined,
             ExclusiveStartKey,
             ConsistentRead: true,
             Limit: 25, // Internal scan page size
         };
+
+        if (open_only) {
+            scanParams.FilterExpression = "#status = :open";
+            scanParams.ExpressionAttributeValues = {
+                ":open": { S: IssueStatus.OPEN },
+            };
+        }
 
         const { Items, LastEvaluatedKey } = await client.send(new ScanCommand(scanParams));
 
@@ -58,6 +63,7 @@ export async function listIssues(
                 createdAt: new Date(parseInt(item.createdAt.N as string)),
                 updatedAt: item.updatedAt ? new Date(parseInt(item.updatedAt.N as string)) : null,
                 order: null,
+                flags: undefined,
             }));
 
             for (const issue of issues) {

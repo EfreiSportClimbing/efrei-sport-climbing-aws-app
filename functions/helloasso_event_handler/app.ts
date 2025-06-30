@@ -444,7 +444,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                                 year: 'numeric',
                                 month: 'long',
                                 day: 'numeric',
-                            })} :\n-#${ticketCount > 1 ? 'places achetées' : 'place achetée'} par ${
+                            })} :\n-# ${ticketCount > 1 ? 'Places achetées' : 'Place achetée'} par ${
                                 orderData.payer.firstName
                             } ${orderData.payer.lastName}`,
                             attachments: ticketFiles.map((file, index) => ({

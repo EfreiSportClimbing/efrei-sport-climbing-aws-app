@@ -872,6 +872,14 @@ export async function button_handler(body: DiscordInteraction): Promise<APIGatew
 
         // call discord api to edit old message with new issues
         return await editResponse(body, update);
+    } else if (custom_id === 'export_orders') {
+        await deferResponse(body, true);
+
+        // open modal to select date range
+        editResponse(body, {
+            content: 'Veuillez sélectionner une plage de dates pour exporter les commandes.',
+        });
+        return;
     } else {
         console.error(`Unknown custom_id: ${custom_id}`);
         return {
