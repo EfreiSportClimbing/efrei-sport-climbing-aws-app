@@ -1,3 +1,5 @@
+import { Order } from "./helloasso.types";
+
 export type User = {
     id: string;
     firstName: string;
@@ -21,13 +23,30 @@ export type TicketFile = {
     date: Date;
 };
 
-export type Order = {
-    id: string;
+export type OrderRecord = {
+    ticketId: string;
+    orderId: string;
     date: Date;
-    user: User;
-    tickets: TicketFile[];
-    nbOfTickets: number;
-    delivered: Date;
-    refunded: Date;
-    failed: Date;
+    state: OrderState;
 };
+
+export enum OrderState {
+    PENDING = "pending",
+    PROCESSED = "processed",
+    CANCELLED = "cancelled",
+}
+
+export type Issue = {
+    id: string;
+    description: string;
+    status: IssueStatus;
+    createdAt: Date;
+    updatedAt: Date | null;
+    order: Order | null;
+    flags?: number; // Bitmask for flags
+};
+
+export enum IssueStatus {
+    OPEN = "open",
+    CLOSED = "closed",
+}

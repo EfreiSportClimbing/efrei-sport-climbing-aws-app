@@ -42,7 +42,7 @@ Resources:
       Policies:
         - AmazonDynamoDBFullAccess
         - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/discord_bot_token-L27b13
+            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/discord_bot_token-zxJaiq
         - S3ReadPolicy:
             BucketName: efrei-sport-climbing-app-test-data
       Layers:
@@ -85,7 +85,7 @@ Resources:
       Policies:
         - AmazonDynamoDBFullAccess
         - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/discord_bot_token-L27b13
+            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/discord_bot_token-zxJaiq
       Layers:
         - !Ref LayerCommons
     Metadata:
@@ -105,6 +105,7 @@ Resources:
       CodeUri: functions/helloasso_event_handler/
       Handler: app.lambdaHandler
       Runtime: nodejs22.x
+      Timeout: 5
       Architectures:
         - arm64
       Events:
@@ -116,9 +117,9 @@ Resources:
       Policies:
         - AmazonDynamoDBFullAccess
         - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/discord_bot_token-L27b13
+            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/discord_bot_token-zxJaiq
         - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/helloasso_client_secret-8W7gcw
+            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/helloasso_client_secret-6EH5xx
         - S3ReadPolicy:
             BucketName: efrei-sport-climbing-app-test-data
       Layers:
@@ -212,6 +213,17 @@ Resources:
           KeyType: HASH
         - AttributeName: orderId
           KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+  IssuesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Efrei-Sport-Climbing-App.issues
+      AttributeDefinitions:
+        - AttributeName: orderId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: orderId
+          KeyType: HASH
       BillingMode: PAY_PER_REQUEST
   LayerCommons:
     Type: AWS::Serverless::LayerVersion

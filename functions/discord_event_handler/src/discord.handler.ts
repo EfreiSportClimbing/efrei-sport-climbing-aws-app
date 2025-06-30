@@ -14,6 +14,7 @@ import {
     DiscordEmbed,
     DiscordMessage,
     DiscordGuildMember,
+    DiscordComponent,
 } from 'commons/discord.types';
 import { getUser, listUsers, putUser } from 'commons/dynamodb.users';
 import {
@@ -26,12 +27,24 @@ import {
     putSession,
     removeUserFromSession,
 } from 'commons/dynamodb.sessions';
-import { User } from 'commons/dynamodb.types';
+import { IssueStatus, User } from 'commons/dynamodb.types';
 import { getSecret } from 'commons/aws.secret';
 import { getFile } from './s3.images';
-import { editResponse, deferResponse, editResponseWithFile } from './discord.interaction';
+import { editResponse, deferResponse, editResponseWithFile, editResponseWithFiles } from './discord.interaction';
 import { USER_NOT_FOUND_RESPONSE } from './discord.utils';
 import { stringify } from 'csv-stringify';
+import { fetchIssueExists, getIssue, listIssues, resolveIssue } from 'commons/dynamodb.issues';
+import { getTicketsByOrderId, listTickets, validateOrders } from 'commons/dynamodb.tickets';
+import {
+    BUTTON_VIEW_ORDER_DETAILS,
+    BUTTON_CANCEL_ORDER,
+    BUTTON_MARK_ISSUE_PROCESSED,
+    BUTTON_VIEW_TICKETS,
+    FLAG_BUTTON_VIEW_ORDER_DETAILS,
+    FLAG_BUTTON_CANCEL_ORDER,
+    FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+    FLAG_BUTTON_VIEW_TICKETS,
+} from 'commons/discord.components';
 
 const SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/discord_bot_token';
 const DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -187,7 +200,9 @@ async function seance_handlher(body: DiscordInteraction, user: User): Promise<Di
 
     const date = generateDate(day, hour);
 
+    console.log('Creating session for date:', date, 'and location:', location);
     const session = await findSession(date, location).catch(() => undefined);
+    console.log('Session found:', session);
 
     if (session) {
         const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
@@ -356,6 +371,131 @@ async function statement_handler(body: DiscordInteraction): Promise<[DiscordMess
     return [response, blob, `bilan_${fromString}_${toString}.csv`];
 }
 
+async function listIssues_handler(body: DiscordInteraction, pre_index: any | null = null): Promise<DiscordMessagePost> {
+    const { options } = body.data as DiscordApplicationCommandData;
+    let open_only = options?.find((option) => option.name === 'open_only')?.value as any as boolean;
+    const limit = 10; // Default limit for pagination
+
+    const lastEvaluatedKey = pre_index && JSON.parse(Buffer.from(pre_index, 'base64').toString('utf8'));
+    if (
+        lastEvaluatedKey &&
+        lastEvaluatedKey.open_only !== undefined &&
+        typeof lastEvaluatedKey.open_only === 'boolean'
+    ) {
+        // If open_only is present in the index, use it
+        open_only = lastEvaluatedKey.open_only;
+    }
+
+    const [issues, index] = await listIssues(open_only, limit, lastEvaluatedKey);
+
+    const embed: DiscordEmbed = {
+        title: 'Liste des issues',
+        description: issues.length > 0 ? '' : 'Aucune issue trouvée.',
+        color: issues.length > 0 ? 15844367 : 3066993, // Red for issues, Green for no issues
+        fields: issues.slice(0, limit).map((issue) => {
+            return {
+                name: `Issue #${issue.id} - ${issue.status}` + (issue.status === IssueStatus.CLOSED ? ' ✅' : ''),
+                value: `**Description :** ${issue.description}\n**Créée le :** ${issue.createdAt.toLocaleDateString(
+                    'fr-FR',
+                )}\n**Modifiée le :** ${issue.updatedAt ? issue.updatedAt.toLocaleDateString('fr-FR') : 'Jamais'}`,
+                inline: false,
+            };
+        }),
+    };
+    const response: DiscordMessagePost = {
+        embeds: [embed],
+    };
+    if (issues.length > 0) {
+        response.components = [
+            {
+                type: DiscordComponentType.ActionRow,
+                components: [
+                    {
+                        type: DiscordComponentType.SelectMenu,
+                        custom_id: 'view_issues',
+                        options: issues.slice(0, limit).map((issue) => ({
+                            label: `Issue #${issue.id} - ${issue.status}`,
+                            value: issue.id,
+                            description: issue.description.slice(0, 97) + (issue.description.length > 97 ? '...' : ''),
+                        })),
+                    } as DiscordComponent,
+                ],
+            },
+        ];
+        if (index) {
+            index.open_only = open_only; // Add open_only to index for pagination
+            const index_64 = Buffer.from(JSON.stringify(index)).toString('base64');
+            if (index_64.length > 88) {
+                console.error('Index too long for custom_id:', index_64);
+            } else {
+                const button: DiscordButton = {
+                    type: DiscordComponentType.Button,
+                    style: DiscordButtonStyle.Primary,
+                    label: 'Voir plus',
+                    custom_id: `list_issues=${index_64}`,
+                };
+                response.components.push({
+                    type: DiscordComponentType.ActionRow,
+                    components: [button],
+                } as DiscordActionRow);
+            }
+        }
+    }
+
+    return response;
+}
+
+async function status_handler(): Promise<DiscordMessagePost> {
+    // This function give the status of the bot on helloasso
+    // The number of tickets sold, the number of issues, the number of users, etc.
+    // It will be used to display the status of the bot on discord
+    // It will return a DiscordMessagePost object with the status of the bot
+    const users = await listUsers();
+    const [issues] = await listIssues(true);
+    const tickets = await listTickets();
+
+    const embed: DiscordEmbed = {
+        title: 'Statut du bot',
+        description: '',
+        color: 0x1e90ff, // Light blue color
+        fields: [
+            {
+                name: 'Utilisateurs',
+                value: `${users.length} utilisateurs enregistrés`,
+                inline: true,
+            },
+            {
+                name: 'Issues ouvertes',
+                value: `${issues.length} issues ouvertes`,
+                inline: true,
+            },
+            {
+                name: 'Tickets',
+                value: `${tickets.filter((ticket) => ticket.sold).length} / ${tickets.length} tickets vendus`,
+                inline: true,
+            },
+        ],
+    };
+    const components: DiscordActionRow[] = [
+        {
+            type: DiscordComponentType.ActionRow,
+            components: [
+                {
+                    type: DiscordComponentType.Button,
+                    style: DiscordButtonStyle.Primary,
+                    label: 'Export orders',
+                    custom_id: 'export_orders',
+                } as DiscordButton,
+            ],
+        },
+    ];
+
+    return {
+        embeds: [embed],
+        components,
+    };
+}
+
 export async function command_handler(body: DiscordInteraction): Promise<APIGatewayProxyResult | void> {
     const { data, member } = body;
     const { name } = data as DiscordApplicationCommandData;
@@ -386,6 +526,28 @@ export async function command_handler(body: DiscordInteraction): Promise<APIGate
                 }
             const [res, file, filename] = await statement_handler(body);
             return await editResponseWithFile(body, res, file, filename);
+        } else if (name === 'issues') {
+            // check if user is admin
+            if (member)
+                if (member?.roles.find((role) => role === process.env.DISCORD_ROLE_ADMIN_ID) === undefined) {
+                    return await editResponse(body, {
+                        content: "Vous n'avez pas les droits pour effectuer cette action",
+                    });
+                }
+            const res = await listIssues_handler(body);
+            return await editResponse(body, res);
+        } else if (name === 'status') {
+            // Make sure the user is an admin
+            if (member) {
+                if (member?.roles.find((role) => role === process.env.DISCORD_ROLE_ADMIN_ID) === undefined) {
+                    return await editResponse(body, {
+                        content: "Vous n'avez pas les droits pour effectuer cette action",
+                    });
+                }
+            }
+
+            const res = await status_handler();
+            return await editResponse(body, res);
         }
     }
 }
@@ -506,18 +668,318 @@ export async function button_handler(body: DiscordInteraction): Promise<APIGatew
     const { data } = body;
     const { custom_id } = data as DiscordMessageComponentData;
 
-    await deferResponse(body, true);
-    const user = await getUser(body.member?.user.id as string).catch(() => undefined);
-    if (!user) {
-        await editResponse(body, USER_NOT_FOUND_RESPONSE);
-        return;
+    if (custom_id === 'register' || custom_id === 'leave') {
+        await deferResponse(body, true);
+        const user = await getUser(body.member?.user.id as string).catch(() => undefined);
+        if (!user) {
+            await editResponse(body, USER_NOT_FOUND_RESPONSE);
+            return;
+        }
+
+        if (custom_id === 'register') {
+            const response = await add_to_session_handler(body.message as DiscordMessage, user);
+            await editResponse(body, response);
+        } else if (custom_id === 'leave') {
+            const response = await remove_from_session_handler(body, user);
+            await editResponse(body, response);
+        }
+    } else if (custom_id.startsWith('mark_order_processed=')) {
+        await deferResponse(body, false);
+        const orderId = custom_id.split('=')[1];
+        // Check if the order exists
+        if (!fetchIssueExists(orderId)) {
+            return await editResponse(body, {
+                content: `La commande ${orderId} n'existe pas.`,
+            });
+        }
+        await resolveIssue(orderId);
+        await validateOrders(orderId);
+        const embed: DiscordEmbed = {
+            title: `Commande ${orderId} traitée`,
+            description: `La commande ${orderId} a été marquée comme traitée par <@${body.member?.user.id}>.`,
+            color: 3066993, // Green color
+            fields: [
+                {
+                    name: 'Statut',
+                    value: 'Traitée',
+                    inline: true,
+                },
+                {
+                    name: 'Date de traitement',
+                    value: new Date().toLocaleDateString('fr-FR', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                    }),
+                    inline: true,
+                },
+            ],
+        };
+        return await editResponse(body, {
+            embeds: [embed],
+        });
+    } else if (custom_id.startsWith('mark_issue_processed=')) {
+        await deferResponse(body, false);
+        const orderId = custom_id.split('=')[1];
+        // Check if the issue exists
+        if (!fetchIssueExists(orderId)) {
+            return await editResponse(body, {
+                content: `La commande ${orderId} n'existe pas.`,
+            });
+        }
+        await resolveIssue(orderId);
+        const embed: DiscordEmbed = {
+            title: `Problème ${orderId} traité`,
+            description: `Le problème ${orderId} a été marqué comme traité par <@${body.member?.user.id}>.`,
+            color: 3066993, // Green color
+            fields: [
+                {
+                    name: 'Statut',
+                    value: 'Traitée',
+                    inline: true,
+                },
+                {
+                    name: 'Date de traitement',
+                    value: new Date().toLocaleDateString('fr-FR', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                    }),
+                    inline: true,
+                },
+            ],
+        };
+        return await editResponse(body, {
+            embeds: [embed],
+        });
+    } else if (custom_id.startsWith('view_tickets=')) {
+        await deferResponse(body, true);
+        const orderId = custom_id.split('=')[1];
+        const tickets = await getTicketsByOrderId(orderId).catch((err) => {
+            console.error(`Error fetching tickets for order ${orderId}:`, err);
+            return [];
+        });
+        if (tickets.length === 0) {
+            return await editResponse(body, {
+                content: `Aucun ticket trouvé pour la commande ${orderId}.`,
+            });
+        }
+        const ticketFiles = await Promise.all(
+            tickets.map(async (ticket) => await getFile(ticket.url).catch(() => null)),
+        );
+        // If any ticket file is null, log an error and skip this user
+        if (ticketFiles.some((file) => file === null)) {
+            console.error(`Error fetching ticket files for order ${orderId}. Some files are missing.`);
+            return await editResponse(body, {
+                content: `Erreur lors de la récupération des tickets pour la commande ${orderId}.`,
+            });
+        }
+        const ticketFilesEntries = ticketFiles.map((file, index) => ({
+            filename: `ticket_${index + 1}.pdf`,
+            file: file!,
+        }));
+        await editResponseWithFiles(
+            body,
+            {
+                content: `Tickets pour la commande ${orderId} :`,
+                attachments: ticketFiles.map((file, index) => ({
+                    filename: `ticket_${index + 1}.pdf`,
+                    id: index.toString(),
+                    description: `Ticket ${index + 1}`,
+                })),
+            } as DiscordMessagePost,
+            ticketFilesEntries,
+        );
+    } else if (custom_id.startsWith('view_order_details=')) {
+        await deferResponse(body, true);
+        const orderId = custom_id.split('=')[1];
+        const orderDetails = await getIssue(orderId).catch((err) => {
+            console.error(`Error fetching order details for order ${orderId}:`, err);
+            return null;
+        });
+        if (!orderDetails) {
+            return await editResponse(body, {
+                content: `Aucun détail trouvé pour la commande ${orderId}.`,
+            });
+        }
+        const embed: DiscordEmbed = {
+            title: `Détails de la commande ${orderId}`,
+            description: orderDetails.description || 'Aucun détail disponible.',
+            fields: [
+                {
+                    name: 'Statut',
+                    value: orderDetails.status || 'Aucun statut disponible.',
+                    inline: true,
+                },
+                {
+                    name: 'Date de création',
+                    value: orderDetails.createdAt
+                        ? new Date(orderDetails.createdAt).toLocaleDateString('fr-FR', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                          })
+                        : 'Aucune date disponible.',
+                    inline: true,
+                },
+                {
+                    name: 'Date de mise à jour',
+                    value: orderDetails.updatedAt
+                        ? new Date(orderDetails.updatedAt).toLocaleDateString('fr-FR', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                          })
+                        : 'Aucune date disponible.',
+                    inline: true,
+                },
+            ],
+            color: orderDetails.status === IssueStatus.CLOSED ? 3066993 : 15844367,
+        };
+        if (orderDetails.order) {
+            embed.fields?.push({
+                name: 'Détails de la commande',
+                value: `**Id** : ${orderDetails.order.id}\n**Montant** : ${
+                    orderDetails.order.amount.total / 100
+                } €\n**Date** : ${new Date(orderDetails.order.date).toLocaleDateString('fr-FR')}\n**Nom** : ${
+                    orderDetails.order.payer.firstName
+                } ${orderDetails.order.payer.lastName}\n**Email** : ${
+                    orderDetails.order.payer.email
+                }\n**Achats** :\n - ${
+                    orderDetails.order.items
+                        .slice(0, 5)
+                        .map(
+                            (item) =>
+                                `${item.name} (${item.customFields
+                                    .map((field) => field.name + ' ' + field.answer)
+                                    .join(', ')})`,
+                        )
+                        .join('\n - ') + (orderDetails.order.items.length > 5 ? '\n - ...' : '')
+                }`,
+                inline: false,
+            });
+        }
+        return await editResponse(body, {
+            content: `Détails de la commande ${orderId} :`,
+            embeds: [embed],
+        });
+    } else if (custom_id.startsWith('list_issues=')) {
+        deferResponse(body, true);
+        // update previous embed with new issues
+        const index_64 = custom_id.split('=')[1];
+
+        const update = await listIssues_handler(body, index_64);
+
+        // call discord api to edit old message with new issues
+        return await editResponse(body, update);
+    } else {
+        console.error(`Unknown custom_id: ${custom_id}`);
+        return {
+            statusCode: 400,
+            body: JSON.stringify({
+                content: 'Unknown action',
+            }),
+        };
+    }
+}
+
+export async function select_menu_handler(body: DiscordInteraction): Promise<APIGatewayProxyResult | void> {
+    const { data } = body;
+    const { custom_id } = data as DiscordMessageComponentData;
+
+    if (custom_id === 'view_issues') {
+        await deferResponse(body, true);
+        const issueId = (data as DiscordMessageComponentData).values?.[0];
+
+        if (!issueId) {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({
+                    content: "Aucun ID d'issue sélectionné.",
+                }),
+            };
+        }
+
+        const issue = await getIssue(issueId).catch((err) => {
+            console.error(`Error fetching issue ${issueId}:`, err);
+            return null;
+        });
+
+        if (!issue) {
+            return {
+                statusCode: 404,
+                body: JSON.stringify({
+                    content: `Issue ${issueId} non trouvée.`,
+                }),
+            };
+        }
+
+        const embed: DiscordEmbed = {
+            title: `Détails de l'issue #${issue.id}`,
+            description: issue.description || 'Aucune description disponible.',
+            color: issue.status === IssueStatus.CLOSED ? 3066993 : 0xff0000,
+            fields: [
+                {
+                    name: 'Statut',
+                    value: issue.status || 'Aucun statut disponible.',
+                    inline: true,
+                },
+                {
+                    name: 'Créée le',
+                    value: issue.createdAt
+                        ? new Date(issue.createdAt).toLocaleDateString('fr-FR', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                          })
+                        : 'Aucune date disponible.',
+                    inline: true,
+                },
+                {
+                    name: 'Modifiée le',
+                    value: issue.updatedAt
+                        ? new Date(issue.updatedAt).toLocaleDateString('fr-FR', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                          })
+                        : 'Jamais modifiée.',
+                    inline: true,
+                },
+            ],
+        };
+
+        // Add buttons for issue actions depending on flags and status
+        const actionRow: DiscordActionRow = {
+            type: DiscordComponentType.ActionRow,
+            components: [],
+        };
+        if (issue.flags === undefined) {
+            issue.flags = 0; // Ensure flags is defined
+        }
+        if (issue.flags & FLAG_BUTTON_VIEW_ORDER_DETAILS) {
+            actionRow.components.push(BUTTON_VIEW_ORDER_DETAILS(issue.id));
+        }
+        if (issue.flags & FLAG_BUTTON_CANCEL_ORDER && issue.status !== IssueStatus.CLOSED) {
+            actionRow.components.push(BUTTON_CANCEL_ORDER(issue.id));
+        }
+        if (issue.flags & FLAG_BUTTON_VIEW_TICKETS && issue.status !== IssueStatus.CLOSED) {
+            actionRow.components.push(BUTTON_VIEW_TICKETS(issue.id));
+        }
+        if (issue.flags & FLAG_BUTTON_MARK_ISSUE_PROCESSED && issue.status !== IssueStatus.CLOSED) {
+            actionRow.components.push(BUTTON_MARK_ISSUE_PROCESSED(issue.id));
+        }
+
+        return await editResponse(body, {
+            embeds: [embed],
+            components: actionRow.components.length > 0 ? [actionRow] : [],
+        });
     }
 
-    if (custom_id === 'register') {
-        const response = await add_to_session_handler(body.message as DiscordMessage, user);
-        await editResponse(body, response);
-    } else if (custom_id === 'leave') {
-        const response = await remove_from_session_handler(body, user);
-        await editResponse(body, response);
-    }
+    return {
+        statusCode: 400,
+        body: JSON.stringify({
+            content: `Unknown select menu action: ${custom_id}`,
+        }),
+    };
 }

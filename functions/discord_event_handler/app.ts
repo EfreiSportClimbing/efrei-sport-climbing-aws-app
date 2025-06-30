@@ -1,12 +1,14 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { sign } from 'tweetnacl';
 import {
+    DiscordComponentType,
     DiscordInteraction,
     DiscordInteractionResponse,
     DiscordInteractionResponseType,
     DiscordInteractionType,
+    DiscordMessageComponentData,
 } from 'commons/discord.types';
-import { command_handler, button_handler } from './src/discord.handler';
+import { command_handler, button_handler, select_menu_handler } from './src/discord.handler';
 import { checkRole } from './src/discord.utils';
 
 export const PUBLIC_KEY: string = process.env.PUBLIC_KEY as string;
@@ -77,9 +79,18 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
     } else if (body.type === DiscordInteractionType.ApplicationCommand) {
         // handle if it's a command
         return (await command_handler(body)) || DUMMY_RESPONSE;
-    } else if (body.type === DiscordInteractionType.MessageComponent) {
+    } else if (
+        body.type === DiscordInteractionType.MessageComponent &&
+        (body.data as DiscordMessageComponentData)?.component_type === DiscordComponentType.Button
+    ) {
         // handle if it's a button
         return (await button_handler(body)) || DUMMY_RESPONSE;
+    } else if (
+        body.type === DiscordInteractionType.MessageComponent &&
+        (body.data as DiscordMessageComponentData)?.component_type === DiscordComponentType.SelectMenu
+    ) {
+        // handle if it's a select menu
+        return (await select_menu_handler(body)) || DUMMY_RESPONSE;
     }
 
     // dummy response

@@ -1,10 +1,10 @@
-import { DynamoDBClient, GetItemCommand, PutItemCommand, ScanCommand, UpdateItemCommand, TransactWriteItemsCommand } from "@aws-sdk/client-dynamodb";
-import { TicketFile } from "./dynamodb.types";
+import { DynamoDBClient, GetItemCommand, PutItemCommand, ScanCommand, TransactWriteItemsCommand } from "@aws-sdk/client-dynamodb";
+import { TicketFile, OrderRecord, OrderState } from "./dynamodb.types";
 
 const client = new DynamoDBClient({ region: "eu-west-3" });
 
-export async function getTickets(id: string, orderId: string | null = null): Promise<TicketFile> {
-    const { Item } = await client.send(new GetItemCommand({ TableName: "Efrei-Sport-Climbing-App.tickets", Key: { id: { S: id }, orderId: { S: orderId || id } } }));
+export async function getTicket(id: string): Promise<TicketFile> {
+    const { Item } = await client.send(new GetItemCommand({ TableName: "Efrei-Sport-Climbing-App.tickets", Key: { id: { S: id }, orderId: { S: id } } }));
     if (!Item) {
         throw new Error("Ticket not found");
     }
@@ -33,7 +33,7 @@ export async function putTicket(ticketInput: TicketFile): Promise<void> {
 }
 
 export async function listTickets(): Promise<TicketFile[]> {
-    const { Items } = await client.send(new ScanCommand({ TableName: "Efrei-Sport-Climbing-App.tickets" }));
+    const { Items } = await client.send(new ScanCommand({ TableName: "Efrei-Sport-Climbing-App.tickets", FilterExpression: "id = orderId" }));
     if (!Items) {
         throw new Error("No tickets found");
     }
@@ -47,26 +47,35 @@ export async function listTickets(): Promise<TicketFile[]> {
 }
 
 export async function getUnsoldTicket(): Promise<TicketFile> {
-    const { Items } = await client.send(
-        new ScanCommand({
-            TableName: "Efrei-Sport-Climbing-App.tickets",
-            FilterExpression: "sold = :false",
-            ExpressionAttributeValues: {
-                ":false": { BOOL: false },
-            },
-            Limit: 1,
-        })
-    );
-    if (!Items) {
-        throw new Error("No tickets found");
-    }
-    const ticket = {
-        id: Items[0].id.S as string,
-        url: Items[0].url.S as string,
-        sold: Items[0].sold.BOOL as boolean,
-        date: new Date(parseInt(Items[0].date.N as string)),
-    };
-    return ticket;
+    let ExclusiveStartKey: any = undefined;
+
+    do {
+        const { Items, LastEvaluatedKey } = await client.send(
+            new ScanCommand({
+                TableName: "Efrei-Sport-Climbing-App.tickets",
+                FilterExpression: "sold = :false",
+                ExpressionAttributeValues: {
+                    ":false": { BOOL: false },
+                },
+                Limit: 10,
+                ExclusiveStartKey,
+            })
+        );
+
+        if (Items && Items.length > 0) {
+            const item = Items[0];
+            return {
+                id: item.id.S as string,
+                url: item.url.S as string,
+                sold: item.sold.BOOL as boolean,
+                date: new Date(parseInt(item.date.N as string)),
+            };
+        }
+
+        ExclusiveStartKey = LastEvaluatedKey;
+    } while (ExclusiveStartKey);
+
+    throw new Error("No unsold ticket found");
 }
 
 export async function getUnsoldTickets(number: number): Promise<TicketFile[]> {
@@ -109,9 +118,26 @@ export async function getUnsoldTickets(number: number): Promise<TicketFile[]> {
     return tickets.slice(0, number);
 }
 
-// ! invalid function, should not be used and should be removed
-// ! Order is not a valid structure for tickets and are separate from tickets
-export async function getOrder(orderId: string): Promise<TicketFile | null> {
+export async function getTicketsByOrderId(orderId: string): Promise<TicketFile[]> {
+    const orders = await getOrders(orderId);
+    if (!orders || orders.length === 0) {
+        throw new Error("No tickets found for the given order ID");
+    }
+
+    let tickets: TicketFile[] = [];
+
+    for (const order of orders) {
+        const ticketData = await getTicket(order.ticketId);
+        tickets.push(ticketData);
+    }
+
+    if (tickets.length === 0) {
+        throw new Error("No tickets found for the given order ID");
+    }
+    return tickets;
+}
+
+export async function getOrders(orderId: string): Promise<OrderRecord[] | null> {
     const { Items } = await client.send(
         new ScanCommand({
             TableName: "Efrei-Sport-Climbing-App.tickets",
@@ -127,18 +153,13 @@ export async function getOrder(orderId: string): Promise<TicketFile | null> {
     if (Items.length === 0) {
         return null;
     }
-    if (Items.length === 1) {
-        const ticket = {
-            id: Items[0].id.S as string,
-            orderId: Items[0].orderId.S as string,
-            url: Items[0].url.S as string,
-            sold: Items[0].sold.BOOL as boolean,
-            date: new Date(parseInt(Items[0].date.N as string)),
-        };
-        return ticket;
-    } else {
-        throw new Error("Multiple tickets found for the same order id");
-    }
+    const tickets = Items.map((item: any) => ({
+        ticketId: item.id.S as string,
+        orderId: item.orderId.S as string,
+        state: item.state.S as OrderState,
+        date: new Date(parseInt(item.date.N as string)),
+    }));
+    return tickets as OrderRecord[];
 }
 
 export async function fetchOrderExists(orderId: string): Promise<boolean> {
@@ -158,7 +179,7 @@ export async function fetchOrderExists(orderId: string): Promise<boolean> {
 }
 
 export async function putOrder(orderId: string, ticketId: string): Promise<void> {
-    const ticket = await getTickets(ticketId);
+    const ticket = await getTicket(ticketId);
     if (ticket.sold) {
         throw new Error("Ticket already sold");
     }
@@ -172,6 +193,7 @@ export async function putOrder(orderId: string, ticketId: string): Promise<void>
                             id: { S: ticketId },
                             orderId: { S: orderId },
                             date: { N: new Date().getTime().toString() },
+                            state: { S: OrderState.PENDING },
                         },
                     },
                 },
@@ -185,6 +207,66 @@ export async function putOrder(orderId: string, ticketId: string): Promise<void>
                         UpdateExpression: "set sold = :sold",
                         ExpressionAttributeValues: {
                             ":sold": { BOOL: true },
+                        },
+                    },
+                },
+            ],
+        })
+    );
+}
+
+export async function validateOrders(orderId: string): Promise<void> {
+    const orders = await getOrders(orderId);
+    if (!orders || orders.length === 0) {
+        throw new Error("No linked ticket found for the given order ID");
+    }
+    await client.send(
+        new TransactWriteItemsCommand({
+            TransactItems: orders.map((ticket) => ({
+                Update: {
+                    TableName: "Efrei-Sport-Climbing-App.tickets",
+                    Key: {
+                        id: { S: ticket.ticketId },
+                        orderId: { S: orderId },
+                    },
+                    UpdateExpression: "SET #s = :state",
+                    ExpressionAttributeNames: {
+                        "#s": "state",
+                    },
+                    ExpressionAttributeValues: {
+                        ":state": { S: OrderState.PROCESSED },
+                    },
+                },
+            })),
+        })
+    );
+}
+
+export async function validateOrder(orderId: string, ticketId: string): Promise<void> {
+    const orders = await getOrders(orderId);
+    if (!orders || orders.length === 0) {
+        throw new Error("No linked ticket found for the given order ID");
+    }
+    const ticket = orders.find((t) => t.ticketId === ticketId);
+    if (!ticket) {
+        throw new Error("Ticket not found in the order");
+    }
+    await client.send(
+        new TransactWriteItemsCommand({
+            TransactItems: [
+                {
+                    Update: {
+                        TableName: "Efrei-Sport-Climbing-App.tickets",
+                        Key: {
+                            id: { S: ticket.ticketId },
+                            orderId: { S: orderId },
+                        },
+                        UpdateExpression: "SET #s = :state",
+                        ExpressionAttributeNames: {
+                            "#s": "state",
+                        },
+                        ExpressionAttributeValues: {
+                            ":state": { S: OrderState.PROCESSED },
                         },
                     },
                 },

@@ -1,11 +1,23 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getSecret } from 'commons/aws.secret';
-import { TicketFile } from 'commons/dynamodb.types';
 import { EventType, Event, Payment, PaymentState, FormType, Order } from 'commons/helloasso.types';
 import { getAccessToken } from 'commons/helloasso.request';
-import { fetchOrderExists, getUnsoldTickets, putOrder } from 'commons/dynamodb.tickets';
+import { fetchOrderExists, getUnsoldTickets, putOrder, validateOrder } from 'commons/dynamodb.tickets';
 import { DiscordMessagePost } from 'commons/discord.types';
 import { getFile } from './src/s3.tickets';
+import { sendDiscordAlert } from './src/discord.interaction';
+import { putIssue, fetchIssueExists } from 'commons/dynamodb.issues';
+import { IssueStatus } from 'commons/dynamodb.types';
+import {
+    BUTTON_VIEW_ORDER_DETAILS,
+    BUTTON_CANCEL_ORDER,
+    BUTTON_MARK_ISSUE_PROCESSED,
+    BUTTON_VIEW_TICKETS,
+    FLAG_BUTTON_VIEW_ORDER_DETAILS,
+    FLAG_BUTTON_CANCEL_ORDER,
+    FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+    FLAG_BUTTON_VIEW_TICKETS,
+} from 'commons/discord.components';
 
 const DISCORD_SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/discord_bot_token';
 const HELLOASSO_SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/helloasso_client_secret';
@@ -26,6 +38,7 @@ const FORMTYPE = FormType.Shop;
 const FIELD_DISCORD_USER_ID = 'identifiant helloasso'; // This should match the custom field name in HelloAsso
 
 const HELLO_ASSO_API_URL = 'https://api.helloasso-sandbox.com/v5';
+const DISCORD_LOG_CHANNEL_ID = '1388125927380090966'; // Replace with your Discord log channel ID
 
 /**
  *
@@ -51,7 +64,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                 // check if order is from climb up
                 const { order } = payment;
                 if (order.formSlug == FORMSLUG && order.formType == FORMTYPE) {
-                    console.log(`Payment authorized for order ${order.id} from form ${order.formSlug}.`);
+                    // Check if the order is an issue
+                    if (await fetchIssueExists(order.id.toString())) {
+                        console.log(`Order ${order.id} is already an issue, skipping processing.`);
+                        return DUMMY_RESPONSE;
+                    }
 
                     // make request to helloasso to check if order is valid
                     const url = `${HELLO_ASSO_API_URL}/orders/${order.id}`;
@@ -65,8 +82,33 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                         },
                     });
 
+                    console.log(`Fetching order ${order.id} from HelloAsso: ${response.status}`);
+
                     if (!response.ok) {
                         console.log(`Error fetching order ${order.id} from HelloAsso: ${response.statusText}`);
+                        await sendDiscordAlert(
+                            `Error fetching order **${order.id}** from HelloAsso: ${
+                                response.statusText
+                            }\nPlease check the order details.\n\n**Order ID**: ${order.id}\n**Payment Amount**: ${
+                                payment.amount / 100
+                            } €\n**Payment Date**: ${new Date(payment.date).toLocaleString(
+                                'fr-FR',
+                            )}\n**Order Form Slug**: ${order.formSlug}\n**Payer Name**: ${
+                                payment.payer.firstName + '  ' + payment.payer.lastName
+                            }\n**Payer Email**: ${payment.payer.email}`,
+                            DISCORD_LOG_CHANNEL_ID,
+                            DISCORD_BOT_TOKEN,
+                            [BUTTON_VIEW_ORDER_DETAILS(order.id), BUTTON_MARK_ISSUE_PROCESSED(order.id)],
+                        );
+                        await putIssue({
+                            id: order.id.toString(),
+                            description: `Error fetching order ${order.id} from HelloAsso`,
+                            status: IssueStatus.OPEN,
+                            createdAt: new Date(),
+                            updatedAt: null,
+                            order: null,
+                            flags: FLAG_BUTTON_VIEW_ORDER_DETAILS + FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                        });
                         return ERROR_RESPONSE;
                     }
 
@@ -74,6 +116,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
                     if (orderData.id != order.id) {
                         console.log('Order does not exist in helloasso.');
+                        return DUMMY_RESPONSE;
+                    }
+
+                    if (orderData.formSlug != FORMSLUG || orderData.formType != FORMTYPE) {
+                        console.log(`Order ${orderData.id} is not from the expected form slug or type.`);
                         return DUMMY_RESPONSE;
                     }
 
@@ -88,6 +135,28 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                     // Check that the order is less than 10 items
                     if (orderData.items.length > 10) {
                         console.log('Order has more than 10 items, not processing.');
+                        await sendDiscordAlert(
+                            `Order ${orderData.id} has more than 10 items, not processing.`,
+                            DISCORD_LOG_CHANNEL_ID,
+                            DISCORD_BOT_TOKEN,
+                            [
+                                BUTTON_VIEW_ORDER_DETAILS(orderData.id),
+                                BUTTON_CANCEL_ORDER(orderData.id),
+                                BUTTON_MARK_ISSUE_PROCESSED(orderData.id),
+                            ],
+                        );
+                        await putIssue({
+                            id: order.id.toString(),
+                            description: `Order ${orderData.id} has more than 10 items, not processing.`,
+                            status: IssueStatus.OPEN,
+                            createdAt: new Date(),
+                            updatedAt: null,
+                            order: orderData,
+                            flags:
+                                FLAG_BUTTON_VIEW_ORDER_DETAILS +
+                                FLAG_BUTTON_CANCEL_ORDER +
+                                FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                        });
                         return ERROR_RESPONSE;
                     }
 
@@ -101,6 +170,28 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                         .flat();
                     if (fields.length === 0 || !fields[0]) {
                         console.log('No or invalid discord user id found in order custom fields.');
+                        await sendDiscordAlert(
+                            `No or invalid discord user id found in order ${order.id}.`,
+                            DISCORD_LOG_CHANNEL_ID,
+                            DISCORD_BOT_TOKEN,
+                            [
+                                BUTTON_VIEW_ORDER_DETAILS(order.id),
+                                BUTTON_CANCEL_ORDER(order.id),
+                                BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                            ],
+                        );
+                        await putIssue({
+                            id: order.id.toString(),
+                            description: `No or invalid discord user id found in order ${order.id}.`,
+                            status: IssueStatus.OPEN,
+                            createdAt: new Date(),
+                            updatedAt: null,
+                            order: orderData,
+                            flags:
+                                FLAG_BUTTON_VIEW_ORDER_DETAILS +
+                                FLAG_BUTTON_CANCEL_ORDER +
+                                FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                        });
                         return ERROR_RESPONSE;
                     }
 
@@ -118,36 +209,122 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                     for (const id in discordUserIds) {
                         if (!/^\d{17,19}$/.test(id)) {
                             console.log(`Invalid Discord user ID: ${id}`);
+                            await sendDiscordAlert(
+                                `Invalid Discord user ID found in order ${order.id}: ${id}`,
+                                DISCORD_LOG_CHANNEL_ID,
+                                DISCORD_BOT_TOKEN,
+                                [
+                                    BUTTON_VIEW_ORDER_DETAILS(order.id),
+                                    BUTTON_CANCEL_ORDER(order.id),
+                                    BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                                ],
+                            );
+                            await putIssue({
+                                id: order.id.toString(),
+                                description: `Invalid Discord user ID found in order ${order.id}: ${id}`,
+                                status: IssueStatus.OPEN,
+                                createdAt: new Date(),
+                                updatedAt: null,
+                                order: orderData,
+                                flags:
+                                    FLAG_BUTTON_VIEW_ORDER_DETAILS +
+                                    FLAG_BUTTON_MARK_ISSUE_PROCESSED +
+                                    FLAG_BUTTON_CANCEL_ORDER,
+                            });
                             return ERROR_RESPONSE;
                         }
                     }
 
+                    // Compute the total number of tickets needed
+                    const totalTicketsNeeded = Object.values(discordUserIds).reduce((sum, count) => sum + count, 0);
+
+                    // Fetch all required tickets before loop
+                    const allTickets = await getUnsoldTickets(totalTicketsNeeded).catch((err) => {
+                        console.error('Error fetching unsold tickets:', err);
+                        return [];
+                    });
+
+                    if (!allTickets || allTickets.length < totalTicketsNeeded) {
+                        console.log('Not enough unsold tickets available.');
+                        await sendDiscordAlert(
+                            `Not enough unsold tickets available for order ${
+                                order.id
+                            }. Needed: ${totalTicketsNeeded}, available: ${allTickets?.length || 0}`,
+                            DISCORD_LOG_CHANNEL_ID,
+                            DISCORD_BOT_TOKEN,
+                            [
+                                BUTTON_VIEW_ORDER_DETAILS(order.id),
+                                BUTTON_CANCEL_ORDER(order.id),
+                                BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                            ],
+                        );
+                        await putIssue({
+                            id: order.id.toString(),
+                            description: `Not enough unsold tickets available. Needed: ${totalTicketsNeeded}, available: ${
+                                allTickets?.length || 0
+                            }`,
+                            status: IssueStatus.OPEN,
+                            createdAt: new Date(),
+                            updatedAt: null,
+                            order: orderData,
+                            flags:
+                                FLAG_BUTTON_VIEW_ORDER_DETAILS +
+                                FLAG_BUTTON_CANCEL_ORDER +
+                                FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                        });
+                        return ERROR_RESPONSE;
+                    }
+
+                    // Send tickets to Discord users
+                    let ticketIndex = 0;
                     for (const [discordUserId, ticketCount] of Object.entries(discordUserIds)) {
                         console.log('Sending tickets to Discord user:', discordUserId, 'Count:', ticketCount);
 
-                        // get ticket
-                        const tickets = await getUnsoldTickets(ticketCount).catch((err) => {
-                            console.error('Error fetching unsold tickets:', err);
-                            return [];
-                        });
-
-                        if (!tickets || tickets.length === 0) {
-                            console.log('No unsold ticket available.');
-                            return ERROR_RESPONSE;
-                        }
+                        // Get tickets for this user
+                        const tickets = allTickets.slice(ticketIndex, ticketIndex + ticketCount);
+                        ticketIndex += ticketCount;
 
                         // Get file from s3
-                        const ticketFiles = await Promise.all(tickets.map(async (ticket) => await getFile(ticket.url)));
+                        const ticketFiles = await Promise.all(
+                            tickets.map(
+                                async (ticket) =>
+                                    await getFile(ticket.url).catch((err) => {
+                                        console.error(`Error fetching ticket file for ${ticket.url}:`, err);
+                                        return null;
+                                    }),
+                            ),
+                        );
 
-                        // log ticket files
+                        // If any ticket file is null, log an error and skip this user
+                        if (ticketFiles.some((file) => file === null)) {
+                            console.error(
+                                `Error fetching ticket files for order ${order.id} for user ${discordUserId}`,
+                            );
+                            await sendDiscordAlert(
+                                `Error fetching ticket files for order **${order.id}** for user **${discordUserId}**`,
+                                DISCORD_LOG_CHANNEL_ID,
+                                DISCORD_BOT_TOKEN,
+                                [BUTTON_VIEW_ORDER_DETAILS(order.id), BUTTON_MARK_ISSUE_PROCESSED(order.id)],
+                            );
+                            await putIssue({
+                                id: order.id.toString(),
+                                description: `Error fetching ticket files for order ${order.id} for user ${discordUserId}`,
+                                status: IssueStatus.OPEN,
+                                createdAt: new Date(),
+                                updatedAt: null,
+                                order: orderData,
+                                flags: FLAG_BUTTON_VIEW_ORDER_DETAILS + FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                            });
+                            continue; // Skip to the next user if there's an error fetching ticket files
+                        }
+
+                        // ! log ticket files as pending
                         for (const ticket of tickets) {
                             // update ticket in db
                             await putOrder(order.id.toString(), ticket.id);
                         }
 
                         // send ticket to discord
-                        //TODO send ticket to discord
-                        // ! Must create a private channel with the user if it does not exist
                         const url_discord = `https://discord.com/api/v8/users/@me/channels`;
                         const body = {
                             recipient_id: discordUserId,
@@ -163,8 +340,42 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
                         const dataCreate = await responseCreate.json();
 
+                        // Fail if bad id was provided
+                        if (!responseCreate.ok) {
+                            console.error(`Error creating Discord channel: ${dataCreate.message}`);
+                            await sendDiscordAlert(
+                                `Error creating Discord channel for user **${discordUserId}**: ${dataCreate.message}`,
+                                DISCORD_LOG_CHANNEL_ID,
+                                DISCORD_BOT_TOKEN,
+                                [
+                                    BUTTON_VIEW_ORDER_DETAILS(order.id),
+                                    BUTTON_VIEW_TICKETS(order.id),
+                                    BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                                ],
+                            );
+                            await putIssue({
+                                id: order.id.toString(),
+                                description: `Error creating Discord channel for user ${discordUserId}: ${dataCreate.message}`,
+                                status: IssueStatus.OPEN,
+                                createdAt: new Date(),
+                                updatedAt: null,
+                                order: orderData,
+                                flags:
+                                    FLAG_BUTTON_VIEW_ORDER_DETAILS +
+                                    FLAG_BUTTON_VIEW_TICKETS +
+                                    FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                            });
+                            continue; // Skip to the next user if channel creation fails
+                        }
+
                         const message: DiscordMessagePost = {
-                            content: `Salut, \nVoici tes places Climb-Up du ${new Date().toLocaleDateString()} :`,
+                            content: `Salut, \nVoici ${
+                                ticketCount > 1 ? 'tes' : 'ta'
+                            } places Climb-Up du ${new Date().toLocaleDateString('fr-FR', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                            })} :`,
                             attachments: ticketFiles.map((file, index) => ({
                                 id: index.toString(),
                                 filename: `ticket_${index + 1}.pdf`, // Assuming the file is a PDF
@@ -179,7 +390,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                         // Append each file to the form data
                         for (const [index, file] of ticketFiles.entries()) {
                             const filename = `ticket_${index + 1}.pdf`; // Assuming the file is a PDF
-                            formData.append(`files[${index}]`, file, filename);
+                            formData.append(`files[${index}]`, file!, filename);
                         }
 
                         const response_discord = await fetch(
@@ -191,7 +402,38 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                             },
                         );
                         const data_discord = await response_discord.json();
-                        console.log(data_discord);
+
+                        if (!response_discord.ok) {
+                            console.error(`Error sending message to Discord: ${data_discord.message}`);
+                            await sendDiscordAlert(
+                                `Error sending message to Discord for user **${discordUserId}**: ${data_discord.message}`,
+                                DISCORD_LOG_CHANNEL_ID,
+                                DISCORD_BOT_TOKEN,
+                                [
+                                    BUTTON_VIEW_ORDER_DETAILS(order.id),
+                                    BUTTON_VIEW_TICKETS(order.id),
+                                    BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                                ],
+                            );
+                            await putIssue({
+                                id: order.id.toString(),
+                                description: `Error sending message to Discord for user ${discordUserId}: ${data_discord.message}`,
+                                status: IssueStatus.OPEN,
+                                createdAt: new Date(),
+                                updatedAt: null,
+                                order: orderData,
+                                flags:
+                                    FLAG_BUTTON_VIEW_ORDER_DETAILS +
+                                    FLAG_BUTTON_VIEW_TICKETS +
+                                    FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                            });
+                            continue; // Skip to the next user if channel creation fails
+                        }
+
+                        for (const ticket of tickets) {
+                            // update ticket in db
+                            await validateOrder(order.id.toString(), ticket.id);
+                        }
                     }
 
                     // return ok
@@ -205,5 +447,5 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
     }
 
     // dummy response
-    return ERROR_RESPONSE;
+    return DUMMY_RESPONSE;
 };

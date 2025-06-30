@@ -107,6 +107,18 @@ export enum DiscordComponentType {
     ChannelInput = 8,
 }
 
+export type SelectOption = {
+    label: string;
+    value: string;
+    description?: string;
+    emoji?: {
+        id?: string;
+        name?: string;
+        animated?: boolean;
+    };
+    default?: boolean;
+};
+
 export type DiscordComponent = {
     type: DiscordComponentType;
     style?: DiscordButtonStyle;
@@ -115,7 +127,7 @@ export type DiscordComponent = {
     disabled?: boolean;
     url?: string;
     custom_id?: string;
-    options?: string[];
+    options?: (string | SelectOption)[];
     placeholder?: string;
     min_values?: number;
     max_values?: number;
