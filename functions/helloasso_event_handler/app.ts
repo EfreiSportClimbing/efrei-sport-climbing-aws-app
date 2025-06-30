@@ -3,7 +3,7 @@ import { getSecret } from 'commons/aws.secret';
 import { EventType, Event, Payment, PaymentState, FormType, Order } from 'commons/helloasso.types';
 import { getAccessToken } from 'commons/helloasso.request';
 import { fetchOrderExists, getUnsoldTickets, putOrder, validateOrder } from 'commons/dynamodb.tickets';
-import { DiscordMessagePost } from 'commons/discord.types';
+import { DiscordGuildMember, DiscordMessagePost } from 'commons/discord.types';
 import { getFile } from './src/s3.tickets';
 import { sendDiscordAlert } from './src/discord.interaction';
 import { putIssue, fetchIssueExists } from 'commons/dynamodb.issues';
@@ -324,6 +324,75 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                             await putOrder(order.id.toString(), ticket.id);
                         }
 
+                        // Check if the user has the according role in Discord
+                        // Need to get user in context of specific guild
+                        const guildId = process.env.GUILD_ID!;
+                        const url = `https://discord.com/api/v8/guilds/${guildId}/members/${discordUserId}`;
+                        const response = await fetch(url, {
+                            method: 'GET',
+                            headers: {
+                                Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
+                            },
+                        });
+
+                        if (!response.ok) {
+                            console.error(
+                                `Error fetching Discord user data for user **${discordUserId} **: ${response.statusText}`,
+                            );
+                            await sendDiscordAlert(
+                                `Error fetching Discord user data for user **${discordUserId}**: ${response.statusText}`,
+                                DISCORD_LOG_CHANNEL_ID,
+                                DISCORD_BOT_TOKEN,
+                                [
+                                    BUTTON_VIEW_ORDER_DETAILS(order.id),
+                                    BUTTON_VIEW_TICKETS(order.id),
+                                    BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                                ],
+                            );
+                            await putIssue({
+                                id: order.id.toString(),
+                                description: `Error fetching Discord user data for user ${discordUserId}: ${response.statusText}`,
+                                status: IssueStatus.OPEN,
+                                createdAt: new Date(),
+                                updatedAt: null,
+                                order: orderData,
+                                flags:
+                                    FLAG_BUTTON_VIEW_ORDER_DETAILS +
+                                    FLAG_BUTTON_VIEW_TICKETS +
+                                    FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                            });
+                            continue; // Skip to the next user if there's an error fetching user data
+                        }
+
+                        const userData: DiscordGuildMember = await response.json();
+
+                        if (!userData.roles || !userData.roles.includes(process.env.DISCORD_ROLE_ID!)) {
+                            console.error(`User **${discordUserId}** is not a member of the association.`);
+                            await sendDiscordAlert(
+                                `User **${discordUserId}** is not a member of the association.`,
+                                DISCORD_LOG_CHANNEL_ID,
+                                DISCORD_BOT_TOKEN,
+                                [
+                                    BUTTON_VIEW_ORDER_DETAILS(order.id),
+                                    BUTTON_VIEW_TICKETS(order.id),
+                                    BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                                ],
+                            );
+                            await putIssue({
+                                id: order.id.toString(),
+                                description: `User ${discordUserId} is not a member of the association.`,
+                                status: IssueStatus.OPEN,
+                                createdAt: new Date(),
+                                updatedAt: null,
+                                order: orderData,
+                                flags:
+                                    FLAG_BUTTON_VIEW_ORDER_DETAILS +
+                                    FLAG_BUTTON_VIEW_TICKETS +
+                                    FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                            });
+                            continue; // Skip to the next user if they don't have the required role
+                        }
+
                         // send ticket to discord
                         const url_discord = `https://discord.com/api/v8/users/@me/channels`;
                         const body = {
@@ -370,12 +439,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
                         const message: DiscordMessagePost = {
                             content: `Salut, \nVoici ${
-                                ticketCount > 1 ? 'tes' : 'ta'
-                            } places Climb-Up du ${new Date().toLocaleDateString('fr-FR', {
+                                ticketCount > 1 ? 'tes places' : 'ta place'
+                            } Climb-Up du ${new Date().toLocaleDateString('fr-FR', {
                                 year: 'numeric',
                                 month: 'long',
                                 day: 'numeric',
-                            })} :`,
+                            })} :\n-#${ticketCount > 1 ? 'places achetées' : 'place achetée'} par ${
+                                orderData.payer.firstName
+                            } ${orderData.payer.lastName}`,
                             attachments: ticketFiles.map((file, index) => ({
                                 id: index.toString(),
                                 filename: `ticket_${index + 1}.pdf`, // Assuming the file is a PDF

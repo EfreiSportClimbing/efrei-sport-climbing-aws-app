@@ -114,6 +114,10 @@ Resources:
           Properties:
             Path: /helloasso-event-handler
             Method: post
+      Environment:
+        Variables:
+          DISCORD_ROLE_ID: '1372130966935572500'
+          GUILD_ID: '1371519432190333059'
       Policies:
         - AmazonDynamoDBFullAccess
         - AWSSecretsManagerGetSecretValuePolicy:
