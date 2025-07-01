@@ -8,7 +8,7 @@ import {
     DiscordInteractionType,
     DiscordMessageComponentData,
 } from 'commons/discord.types';
-import { command_handler, button_handler, select_menu_handler } from './src/discord.handler';
+import { command_handler, button_handler, select_menu_handler, modal_handler } from './src/discord.handler';
 import { checkRole } from './src/discord.utils';
 
 export const PUBLIC_KEY: string = process.env.PUBLIC_KEY as string;
@@ -91,6 +91,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
     ) {
         // handle if it's a select menu
         return (await select_menu_handler(body)) || DUMMY_RESPONSE;
+    } else if (body.type === DiscordInteractionType.ModalSubmit) {
+        // handle if it's a modal submit
+        return (await modal_handler(body)) || DUMMY_RESPONSE;
     }
 
     // dummy response

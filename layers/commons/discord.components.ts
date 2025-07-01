@@ -31,3 +31,11 @@ export const BUTTON_VIEW_TICKETS: (orderId: string | number) => DiscordButton = 
     custom_id: "view_tickets=" + orderId,
 });
 export const FLAG_BUTTON_VIEW_TICKETS = 0b00001000;
+
+export const BUTTON_MARK_ORDER_PROCESSED: (orderId: string | number) => DiscordButton = (orderId) => ({
+    type: DiscordComponentType.Button,
+    style: DiscordButtonStyle.Success,
+    label: "Mark Order as Processed",
+    custom_id: "mark_order_processed=" + orderId,
+});
+export const FLAG_BUTTON_MARK_ORDER_PROCESSED = 0b00010000;

@@ -162,6 +162,32 @@ export async function getOrders(orderId: string): Promise<OrderRecord[] | null> 
     return tickets as OrderRecord[];
 }
 
+export async function listOrders(start_date: Date, end_date: Date): Promise<OrderRecord[]> {
+    const { Items } = await client.send(
+        new ScanCommand({
+            TableName: "Efrei-Sport-Climbing-App.tickets",
+            FilterExpression: "#date BETWEEN :start_date AND :end_date and orderId <> id",
+            ExpressionAttributeValues: {
+                ":start_date": { N: start_date.getTime().toString() },
+                ":end_date": { N: end_date.getTime().toString() },
+            },
+            ExpressionAttributeNames: {
+                "#date": "date",
+            },
+        })
+    );
+    if (!Items) {
+        throw new Error("No orders found");
+    }
+    const orders = Items.map((item: any) => ({
+        ticketId: item.id.S as string,
+        orderId: item.orderId.S as string,
+        state: item.state.S as OrderState,
+        date: new Date(parseInt(item.date.N as string)),
+    }));
+    return orders as OrderRecord[];
+}
+
 export async function fetchOrderExists(orderId: string): Promise<boolean> {
     const { Items } = await client.send(
         new ScanCommand({

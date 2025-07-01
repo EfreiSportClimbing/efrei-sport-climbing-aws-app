@@ -71,11 +71,28 @@ export type DiscordMessageComponentData = {
     values?: any[];
 };
 
+export type DiscordComponentSubmit =
+    | {
+          custom_id: string;
+          components: DiscordComponentSubmit[];
+          type: DiscordComponentType.ActionRow;
+      }
+    | {
+          type: DiscordComponentType.StringInput;
+          custom_id: string;
+          value: string;
+      };
+
+export type DiscordModalSubmitData = {
+    custom_id: string;
+    components: DiscordComponentSubmit[];
+};
+
 export type DiscordInteraction = {
     id: string;
     application_id: string;
     type: DiscordInteractionType;
-    data?: DiscordApplicationCommandData | DiscordMessageComponentData;
+    data?: DiscordApplicationCommandData | DiscordMessageComponentData | DiscordModalSubmitData;
     guild_id?: string;
     channel_id?: string;
     member?: DiscordGuildMember;
@@ -105,6 +122,13 @@ export enum DiscordComponentType {
     RoleInput = 6,
     MentionableInput = 7,
     ChannelInput = 8,
+    Section = 9,
+    TextInput = 10,
+    Thumbnail = 11,
+    MediaGallery = 12,
+    File = 13,
+    Separator = 14,
+    Container = 15,
 }
 
 export type SelectOption = {
@@ -119,19 +143,34 @@ export type SelectOption = {
     default?: boolean;
 };
 
-export type DiscordComponent = {
-    type: DiscordComponentType;
-    style?: DiscordButtonStyle;
-    label?: string;
-    emoji?: string;
-    disabled?: boolean;
-    url?: string;
-    custom_id?: string;
-    options?: (string | SelectOption)[];
+export type DiscordComponent =
+    | {
+          type: DiscordComponentType;
+          style?: DiscordButtonStyle;
+          label?: string;
+          emoji?: string;
+          disabled?: boolean;
+          url?: string;
+          custom_id?: string;
+          options?: (string | SelectOption)[];
+          placeholder?: string;
+          min_values?: number;
+          max_values?: number;
+          components?: DiscordComponent[];
+      }
+    | DiscordStringInput
+    | DiscordButton
+    | DiscordActionRow;
+
+export type DiscordStringInput = {
+    type: DiscordComponentType.StringInput;
+    custom_id: string;
+    label: string;
+    style: 1 | 2; // 1 for short, 2 for paragraph
+    min_length?: number;
+    max_length?: number;
     placeholder?: string;
-    min_values?: number;
-    max_values?: number;
-    components?: DiscordComponent[];
+    required?: boolean;
 };
 
 export type DiscordButton = {
@@ -234,15 +273,17 @@ export enum DiscordInteractionFlags {
 
 export type DiscordInteractionResponse = {
     type: DiscordInteractionResponseType;
-    data?: {
-        tts?: boolean;
-        content?: string;
-        embeds?: DiscordEmbed[];
-        allowed_mentions?: string[];
-        flags?: number;
-        components?: DiscordComponent[];
-        attachments?: DiscordAttachment[];
-    };
+    data?:
+        | {
+              tts?: boolean;
+              content?: string;
+              embeds?: DiscordEmbed[];
+              allowed_mentions?: string[];
+              flags?: number;
+              components?: DiscordComponent[];
+              attachments?: DiscordAttachment[];
+          }
+        | { title: string; custom_id: string; components: DiscordComponent[] };
 };
 
 export type DiscordMessagePost = {

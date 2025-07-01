@@ -43,6 +43,8 @@ Resources:
         - AmazonDynamoDBFullAccess
         - AWSSecretsManagerGetSecretValuePolicy:
             SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/discord_bot_token-zxJaiq
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/helloasso_client_secret-6EH5xx
         - S3ReadPolicy:
             BucketName: efrei-sport-climbing-app-test-data
       Layers:

@@ -15,6 +15,8 @@ import {
     DiscordMessage,
     DiscordGuildMember,
     DiscordComponent,
+    DiscordModalSubmitData,
+    DiscordComponentSubmit,
 } from 'commons/discord.types';
 import { getUser, listUsers, putUser } from 'commons/dynamodb.users';
 import {
@@ -27,14 +29,14 @@ import {
     putSession,
     removeUserFromSession,
 } from 'commons/dynamodb.sessions';
-import { IssueStatus, User } from 'commons/dynamodb.types';
+import { IssueStatus, OrderRecord, OrderState, User } from 'commons/dynamodb.types';
 import { getSecret } from 'commons/aws.secret';
 import { getFile } from './s3.images';
 import { editResponse, deferResponse, editResponseWithFile, editResponseWithFiles } from './discord.interaction';
 import { USER_NOT_FOUND_RESPONSE } from './discord.utils';
 import { stringify } from 'csv-stringify';
 import { fetchIssueExists, getIssue, listIssues, resolveIssue } from 'commons/dynamodb.issues';
-import { getTicketsByOrderId, listTickets, validateOrders } from 'commons/dynamodb.tickets';
+import { getOrders, getTicketsByOrderId, listOrders, listTickets, validateOrders } from 'commons/dynamodb.tickets';
 import {
     BUTTON_VIEW_ORDER_DETAILS,
     BUTTON_CANCEL_ORDER,
@@ -44,9 +46,13 @@ import {
     FLAG_BUTTON_CANCEL_ORDER,
     FLAG_BUTTON_MARK_ISSUE_PROCESSED,
     FLAG_BUTTON_VIEW_TICKETS,
+    FLAG_BUTTON_MARK_ORDER_PROCESSED,
+    BUTTON_MARK_ORDER_PROCESSED,
 } from 'commons/discord.components';
+import { getOrderDetails } from 'commons/helloasso.request';
 
 const SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/discord_bot_token';
+const HELLOASSO_SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/helloasso_client_secret';
 const DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const CHANNELS: { [key: string]: string } = {
     antrebloc: process.env.ANTREBLOC_CHANNEL as string,
@@ -82,6 +88,11 @@ const generateDate = (day: string, hour: string) => {
     date.setMilliseconds(0);
 
     return date;
+};
+
+const parseDate = (dateStr: string): Date => {
+    const [day, month, year] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day); // month is 0-indexed
 };
 
 async function create_seance(
@@ -312,8 +323,15 @@ async function helloasso_handler(body: DiscordInteraction, user: User): Promise<
 async function statement_handler(body: DiscordInteraction): Promise<[DiscordMessagePost, Blob, string]> {
     const { options } = body.data as DiscordApplicationCommandData;
 
-    const from = new Date(options?.find((option) => option.name === 'depuis')?.value as string);
-    const to = new Date(options?.find((option) => option.name === 'a')?.value as string);
+    const from = parseDate(options?.find((option) => option.name === 'depuis')?.value as string);
+    const to = parseDate(options?.find((option) => option.name === 'a')?.value as string);
+
+    if (!from || !to || isNaN(from.getTime()) || isNaN(to.getTime())) {
+        throw new Error('Invalid date');
+    }
+    if (from > to) {
+        throw new Error('Invalid date range');
+    }
 
     const users = await listUsers();
 
@@ -496,6 +514,63 @@ async function status_handler(): Promise<DiscordMessagePost> {
     };
 }
 
+async function showOrderDetails_handler(body: DiscordInteraction): Promise<DiscordMessagePost> {
+    const { data } = body;
+    const { options } = data as DiscordApplicationCommandData;
+
+    const orderId = options?.find((option) => option.name === 'id')?.value as string;
+
+    if (!orderId) {
+        return {
+            content: 'Veuillez fournir un ID de commande valide.',
+        };
+    }
+
+    const orders = await getOrders(orderId);
+    if (!orders || orders.length === 0) {
+        return {
+            content: 'Commande non trouvée.',
+        };
+    }
+
+    const { HELLO_ASSO_CLIENT_ID, HELLO_ASSO_CLIENT_SECRET } = await getSecret(HELLOASSO_SECRET_PATH);
+
+    // Get helloasso order details
+    const orderData = await getOrderDetails(orderId, HELLO_ASSO_CLIENT_ID, HELLO_ASSO_CLIENT_SECRET);
+
+    const nbOrderProcessed = orders.filter((order) => order.state === OrderState.PROCESSED).length;
+    const nbOrderPending = orders.filter((order) => order.state === OrderState.PENDING).length;
+
+    const embed: DiscordEmbed = {
+        title: `Détails de la commande ${orderId}`,
+        description:
+            `**Date de la commande :** ${new Date(orderData.date).toLocaleDateString('fr-FR')}\n` +
+            `**Montant total :** ${orderData.amount.total / 100} €\n` +
+            `**Statut :** ${nbOrderProcessed} ticket(s) traité(s) / ${nbOrderPending} ticket(s) en attente\n` +
+            `**Nom :** ${orderData.payer.firstName} ${orderData.payer.lastName}\n` +
+            `**Email :** ${orderData.payer.email}\n` +
+            `**Achats :**\n` +
+            orderData.items
+                .map(
+                    (item) =>
+                        `- ${item.name} (${item.customFields
+                            .map((field) => `${field.name}: ${field.answer}`)
+                            .join(', ')})`,
+                )
+                .join('\n'),
+    };
+
+    return {
+        embeds: [embed],
+        components: [
+            {
+                type: DiscordComponentType.ActionRow,
+                components: [BUTTON_VIEW_TICKETS(orderId)],
+            },
+        ],
+    };
+}
+
 export async function command_handler(body: DiscordInteraction): Promise<APIGatewayProxyResult | void> {
     const { data, member } = body;
     const { name } = data as DiscordApplicationCommandData;
@@ -524,8 +599,15 @@ export async function command_handler(body: DiscordInteraction): Promise<APIGate
                         content: "Vous n'avez pas les droits pour effectuer cette action",
                     });
                 }
-            const [res, file, filename] = await statement_handler(body);
-            return await editResponseWithFile(body, res, file, filename);
+            try {
+                const [res, file, filename] = await statement_handler(body);
+                return await editResponseWithFile(body, res, file, filename);
+            } catch (err: { message: string } | any) {
+                console.error('Error generating statement:', err);
+                return await editResponse(body, {
+                    content: "Une erreur s'est produite lors de la génération du relevé : " + (err.message || err),
+                });
+            }
         } else if (name === 'issues') {
             // check if user is admin
             if (member)
@@ -547,6 +629,11 @@ export async function command_handler(body: DiscordInteraction): Promise<APIGate
             }
 
             const res = await status_handler();
+            return await editResponse(body, res);
+        } else if (name === 'commande') {
+            console.log('Handling order command');
+            const res = await showOrderDetails_handler(body);
+            console.log('Order command response:', res);
             return await editResponse(body, res);
         }
     }
@@ -662,6 +749,48 @@ async function add_to_session_handler(message: DiscordMessage, user: User): Prom
         });
         return { content: 'Vous avez été ajouté à la séance.' };
     }
+}
+
+function export_orders_handler(): DiscordInteractionResponse {
+    return {
+        type: DiscordInteractionResponseType.Modal,
+        data: {
+            title: 'Export des commandes',
+            custom_id: 'export_orders_modal',
+            components: [
+                {
+                    type: DiscordComponentType.ActionRow,
+                    components: [
+                        {
+                            type: DiscordComponentType.StringInput,
+                            custom_id: 'start_date',
+                            label: 'Date de début (JJ-MM-AAAA)',
+                            style: 1,
+                            min_length: 10,
+                            max_length: 10,
+                            placeholder: 'JJ-MM-AAAA',
+                            required: true,
+                        },
+                    ],
+                },
+                {
+                    type: DiscordComponentType.ActionRow,
+                    components: [
+                        {
+                            type: DiscordComponentType.StringInput,
+                            custom_id: 'end_date',
+                            label: 'Date de fin (JJ-MM-AAAA)',
+                            style: 1,
+                            min_length: 10,
+                            max_length: 10,
+                            placeholder: 'JJ-MM-AAAA',
+                            required: true,
+                        },
+                    ],
+                },
+            ],
+        },
+    };
 }
 
 export async function button_handler(body: DiscordInteraction): Promise<APIGatewayProxyResult | void> {
@@ -873,13 +1002,13 @@ export async function button_handler(body: DiscordInteraction): Promise<APIGatew
         // call discord api to edit old message with new issues
         return await editResponse(body, update);
     } else if (custom_id === 'export_orders') {
-        await deferResponse(body, true);
+        const res = export_orders_handler();
 
         // open modal to select date range
-        editResponse(body, {
-            content: 'Veuillez sélectionner une plage de dates pour exporter les commandes.',
-        });
-        return;
+        return {
+            statusCode: 200,
+            body: JSON.stringify(res),
+        };
     } else {
         console.error(`Unknown custom_id: ${custom_id}`);
         return {
@@ -887,6 +1016,9 @@ export async function button_handler(body: DiscordInteraction): Promise<APIGatew
             body: JSON.stringify({
                 content: 'Unknown action',
             }),
+            headers: {
+                'Content-Type': 'application/json',
+            },
         };
     }
 }
@@ -977,6 +1109,9 @@ export async function select_menu_handler(body: DiscordInteraction): Promise<API
         if (issue.flags & FLAG_BUTTON_MARK_ISSUE_PROCESSED && issue.status !== IssueStatus.CLOSED) {
             actionRow.components.push(BUTTON_MARK_ISSUE_PROCESSED(issue.id));
         }
+        if (issue.flags & FLAG_BUTTON_MARK_ORDER_PROCESSED && issue.status !== IssueStatus.CLOSED) {
+            actionRow.components.push(BUTTON_MARK_ORDER_PROCESSED(issue.id));
+        }
 
         return await editResponse(body, {
             embeds: [embed],
@@ -990,4 +1125,86 @@ export async function select_menu_handler(body: DiscordInteraction): Promise<API
             content: `Unknown select menu action: ${custom_id}`,
         }),
     };
+}
+
+async function export_order_handler(body: DiscordInteraction): Promise<[DiscordMessagePost, Blob, string]> {
+    const { data } = body as { data: DiscordModalSubmitData } & DiscordInteraction;
+
+    const startDateString = (
+        (data.components[0] as { components: DiscordComponentSubmit[] })?.components[0] as { value: string }
+    ).value;
+    const endDateString = (
+        (data.components[1] as { components: DiscordComponentSubmit[] })?.components[0] as { value: string }
+    ).value;
+
+    const startDate = parseDate(startDateString);
+    const endDate = parseDate(endDateString);
+    if (!startDate || !endDate || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        throw new Error('Invalid date format. Please use JJ-MM-AAAA.');
+    }
+    if (startDate > endDate) {
+        throw new Error('La date de début doit être antérieure à la date de fin.');
+    }
+
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+
+    const orders: OrderRecord[] = await listOrders(startDate, endDate);
+    if (orders.length === 0) {
+        return [
+            {
+                content: 'Aucune commande trouvée pour cette période.',
+            },
+            new Blob(),
+            '',
+        ];
+    }
+
+    // build CSV data
+    // col 1: Order ID
+    // col 2: Payer Name
+    // col 3: Payer Email
+    // col 4: Order Date
+    // col 5: Order Amount
+    // col 6: Order Items in JSON format
+    // col 7: Order State
+    const csv_data = orders.map((order) => {
+        return [order.orderId, order.date.toLocaleString('fr-FR'), order.ticketId, order.state];
+    });
+
+    const formatedData = stringify(csv_data, {
+        header: true,
+        columns: ['Order ID', 'Order Date', 'Ticket ID', 'Order State'],
+    });
+    const formatedDataString = await streamToString(formatedData);
+
+    const blob = new Blob([formatedDataString], { type: 'text/csv' });
+    const fileName = `orders_${startDateString}_${endDateString}.csv`;
+
+    return [
+        {
+            content: 'Voici votre fichier CSV contenant les commandes.',
+        },
+        blob,
+        fileName,
+    ];
+}
+
+export async function modal_handler(body: DiscordInteraction): Promise<APIGatewayProxyResult | void> {
+    const { data } = body as { data: DiscordModalSubmitData } & DiscordInteraction;
+    const { custom_id } = data;
+
+    if (custom_id === 'export_orders_modal') {
+        await deferResponse(body, true);
+
+        try {
+            const [res, file, filename] = await export_order_handler(body);
+            return await editResponseWithFile(body, res, file, filename);
+        } catch (err: any) {
+            console.error('Error exporting orders:', err);
+            return await editResponse(body, {
+                content: `Une erreur s'est produite lors de l'export des commandes : ${err.message || err}`,
+            });
+        }
+    }
 }

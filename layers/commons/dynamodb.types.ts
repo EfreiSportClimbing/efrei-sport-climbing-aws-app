@@ -33,7 +33,7 @@ export type OrderRecord = {
 export enum OrderState {
     PENDING = "pending",
     PROCESSED = "processed",
-    CANCELLED = "cancelled",
+    CANCELED = "cancelled",
 }
 
 export type Issue = {

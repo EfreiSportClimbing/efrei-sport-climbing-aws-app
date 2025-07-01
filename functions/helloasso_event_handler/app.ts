@@ -17,6 +17,8 @@ import {
     FLAG_BUTTON_CANCEL_ORDER,
     FLAG_BUTTON_MARK_ISSUE_PROCESSED,
     FLAG_BUTTON_VIEW_TICKETS,
+    FLAG_BUTTON_MARK_ORDER_PROCESSED,
+    BUTTON_MARK_ORDER_PROCESSED,
 } from 'commons/discord.components';
 
 const DISCORD_SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/discord_bot_token';
@@ -346,7 +348,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                                 [
                                     BUTTON_VIEW_ORDER_DETAILS(order.id),
                                     BUTTON_VIEW_TICKETS(order.id),
-                                    BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                                    BUTTON_MARK_ORDER_PROCESSED(order.id),
                                 ],
                             );
                             await putIssue({
@@ -359,7 +361,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                                 flags:
                                     FLAG_BUTTON_VIEW_ORDER_DETAILS +
                                     FLAG_BUTTON_VIEW_TICKETS +
-                                    FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                                    FLAG_BUTTON_MARK_ORDER_PROCESSED,
                             });
                             continue; // Skip to the next user if there's an error fetching user data
                         }
@@ -375,7 +377,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                                 [
                                     BUTTON_VIEW_ORDER_DETAILS(order.id),
                                     BUTTON_VIEW_TICKETS(order.id),
-                                    BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                                    BUTTON_MARK_ORDER_PROCESSED(order.id),
                                 ],
                             );
                             await putIssue({
@@ -388,7 +390,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                                 flags:
                                     FLAG_BUTTON_VIEW_ORDER_DETAILS +
                                     FLAG_BUTTON_VIEW_TICKETS +
-                                    FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                                    FLAG_BUTTON_MARK_ORDER_PROCESSED,
                             });
                             continue; // Skip to the next user if they don't have the required role
                         }
@@ -419,7 +421,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                                 [
                                     BUTTON_VIEW_ORDER_DETAILS(order.id),
                                     BUTTON_VIEW_TICKETS(order.id),
-                                    BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                                    BUTTON_MARK_ORDER_PROCESSED(order.id),
                                 ],
                             );
                             await putIssue({
@@ -432,7 +434,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                                 flags:
                                     FLAG_BUTTON_VIEW_ORDER_DETAILS +
                                     FLAG_BUTTON_VIEW_TICKETS +
-                                    FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                                    FLAG_BUTTON_MARK_ORDER_PROCESSED,
                             });
                             continue; // Skip to the next user if channel creation fails
                         }
@@ -483,7 +485,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                                 [
                                     BUTTON_VIEW_ORDER_DETAILS(order.id),
                                     BUTTON_VIEW_TICKETS(order.id),
-                                    BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                                    BUTTON_MARK_ORDER_PROCESSED(order.id),
                                 ],
                             );
                             await putIssue({
@@ -496,7 +498,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                                 flags:
                                     FLAG_BUTTON_VIEW_ORDER_DETAILS +
                                     FLAG_BUTTON_VIEW_TICKETS +
-                                    FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                                    FLAG_BUTTON_MARK_ORDER_PROCESSED,
                             });
                             continue; // Skip to the next user if channel creation fails
                         }
