@@ -32,7 +32,13 @@ import {
 import { IssueStatus, OrderRecord, OrderState, User } from 'commons/dynamodb.types';
 import { getSecret } from 'commons/aws.secret';
 import { getFile } from './s3.images';
-import { editResponse, deferResponse, editResponseWithFile, editResponseWithFiles } from './discord.interaction';
+import {
+    editResponse,
+    deferResponse,
+    editResponseWithFile,
+    editResponseWithFiles,
+    updateButtonOfMessage,
+} from './discord.interaction';
 import { USER_NOT_FOUND_RESPONSE } from './discord.utils';
 import { stringify } from 'csv-stringify';
 import { fetchIssueExists, getIssue, listIssues, resolveIssue, updateIssue } from 'commons/dynamodb.issues';
@@ -58,6 +64,7 @@ import {
     FLAG_BUTTON_MARK_ORDER_PROCESSED,
     BUTTON_MARK_ORDER_PROCESSED,
     FLAG_BUTTON_FETCH_TICKETS,
+    BUTTON_FETCH_TICKETS,
 } from 'commons/discord.components';
 import { cancelPaiementOfOrder, getOrderDetails } from 'commons/helloasso.request';
 
@@ -1045,6 +1052,8 @@ export async function button_handler(body: DiscordInteraction): Promise<APIGatew
         const orderId = custom_id.split('=')[1];
         await deferResponse(body, true);
 
+        const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
+
         if (await fetchOrderExists(orderId.toString())) {
             return await editResponse(body, {
                 content: `Les tickets pour la commande ${orderId} ont déjà été attribués.`,
@@ -1118,6 +1127,8 @@ export async function button_handler(body: DiscordInteraction): Promise<APIGatew
         await updateIssue(orderId.toString(), {
             flags: FLAG_BUTTON_VIEW_ORDER_DETAILS + FLAG_BUTTON_VIEW_TICKETS + FLAG_BUTTON_MARK_ORDER_PROCESSED,
         });
+
+        await updateButtonOfMessage(body.channel_id as string, body.message?.id as string, orderId, DISCORD_BOT_TOKEN);
 
         // Return the tickets as a response
         const ticketFilesEntries = ticketFiles.map((file, index) => ({
@@ -1248,6 +1259,9 @@ export async function select_menu_handler(body: DiscordInteraction): Promise<API
         if (issue.flags & FLAG_BUTTON_MARK_ORDER_PROCESSED && issue.status !== IssueStatus.CLOSED) {
             actionRow.components.push(BUTTON_MARK_ORDER_PROCESSED(issue.id));
         }
+        if (issue.flags & FLAG_BUTTON_FETCH_TICKETS && issue.status !== IssueStatus.CLOSED) {
+            actionRow.components.push(BUTTON_FETCH_TICKETS(issue.id));
+        }
 
         return await editResponse(body, {
             embeds: [embed],
@@ -1330,6 +1344,8 @@ export async function modal_handler(body: DiscordInteraction): Promise<APIGatewa
     const { data } = body as { data: DiscordModalSubmitData } & DiscordInteraction;
     const { custom_id } = data;
 
+    const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
+
     if (custom_id === 'export_orders_modal') {
         await deferResponse(body, true);
 
@@ -1358,6 +1374,13 @@ export async function modal_handler(body: DiscordInteraction): Promise<APIGatewa
             });
         }
         await resolveIssue(issueId);
+
+        await updateIssue(issueId.toString(), {
+            flags: FLAG_BUTTON_VIEW_ORDER_DETAILS,
+        });
+
+        await updateButtonOfMessage(body.channel_id as string, body.message?.id as string, issueId, DISCORD_BOT_TOKEN);
+
         const embed: DiscordEmbed = {
             title: `Problème ${issueId} traité`,
             description: `Le problème ${issueId} a été marqué comme traité par <@${body.member?.user.id}>.`,
@@ -1398,6 +1421,12 @@ export async function modal_handler(body: DiscordInteraction): Promise<APIGatewa
         }
         await resolveIssue(orderId);
         await validateOrders(orderId);
+
+        await updateIssue(orderId.toString(), {
+            flags: FLAG_BUTTON_VIEW_ORDER_DETAILS,
+        });
+
+        await updateButtonOfMessage(body.channel_id as string, body.message?.id as string, orderId, DISCORD_BOT_TOKEN);
         const embed: DiscordEmbed = {
             title: `Commande ${orderId} traitée`,
             description: `La commande ${orderId} a été marquée comme traitée par <@${body.member?.user.id}>.`,
@@ -1443,6 +1472,17 @@ export async function modal_handler(body: DiscordInteraction): Promise<APIGatewa
                     status: IssueStatus.CLOSED,
                     description: `La commande ${orderId} a été annulée par <@${body.member?.user.id}>.`,
                 });
+
+                await updateIssue(orderId.toString(), {
+                    flags: FLAG_BUTTON_VIEW_ORDER_DETAILS,
+                });
+
+                await updateButtonOfMessage(
+                    body.channel_id as string,
+                    body.message?.id as string,
+                    orderId,
+                    DISCORD_BOT_TOKEN,
+                );
                 const embed: DiscordEmbed = {
                     title: `Commande ${orderId} annulée`,
                     description: `La commande ${orderId} a été annulée par <@${body.member?.user.id}>.`,
