@@ -35,8 +35,17 @@ import { getFile } from './s3.images';
 import { editResponse, deferResponse, editResponseWithFile, editResponseWithFiles } from './discord.interaction';
 import { USER_NOT_FOUND_RESPONSE } from './discord.utils';
 import { stringify } from 'csv-stringify';
-import { fetchIssueExists, getIssue, listIssues, resolveIssue } from 'commons/dynamodb.issues';
-import { getOrders, getTicketsByOrderId, listOrders, listTickets, validateOrders } from 'commons/dynamodb.tickets';
+import { fetchIssueExists, getIssue, listIssues, resolveIssue, updateIssue } from 'commons/dynamodb.issues';
+import {
+    fetchOrderExists,
+    getOrders,
+    getTicketsByOrderId,
+    getUnsoldTickets,
+    listOrders,
+    listTickets,
+    putOrder,
+    validateOrders,
+} from 'commons/dynamodb.tickets';
 import {
     BUTTON_VIEW_ORDER_DETAILS,
     BUTTON_CANCEL_ORDER,
@@ -48,11 +57,12 @@ import {
     FLAG_BUTTON_VIEW_TICKETS,
     FLAG_BUTTON_MARK_ORDER_PROCESSED,
     BUTTON_MARK_ORDER_PROCESSED,
+    FLAG_BUTTON_FETCH_TICKETS,
 } from 'commons/discord.components';
-import { getOrderDetails } from 'commons/helloasso.request';
+import { cancelPaiementOfOrder, getOrderDetails } from 'commons/helloasso.request';
 
 const SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/discord_bot_token';
-const HELLOASSO_SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/helloasso_client_secret';
+const HELLO_ASSO_SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/helloasso_client_secret';
 const DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const CHANNELS: { [key: string]: string } = {
     antrebloc: process.env.ANTREBLOC_CHANNEL as string,
@@ -529,24 +539,36 @@ async function showOrderDetails_handler(body: DiscordInteraction): Promise<Disco
     const orders = await getOrders(orderId);
     if (!orders || orders.length === 0) {
         return {
-            content: 'Commande non trouvée.',
+            content: "Commande non trouvée. Aucun ticket est associé à cet ordre d'achat.",
         };
     }
 
-    const { HELLO_ASSO_CLIENT_ID, HELLO_ASSO_CLIENT_SECRET } = await getSecret(HELLOASSO_SECRET_PATH);
+    const { HELLO_ASSO_CLIENT_ID, HELLO_ASSO_CLIENT_SECRET } = await getSecret(HELLO_ASSO_SECRET_PATH);
 
     // Get helloasso order details
     const orderData = await getOrderDetails(orderId, HELLO_ASSO_CLIENT_ID, HELLO_ASSO_CLIENT_SECRET);
 
     const nbOrderProcessed = orders.filter((order) => order.state === OrderState.PROCESSED).length;
     const nbOrderPending = orders.filter((order) => order.state === OrderState.PENDING).length;
+    const nbOrderCancelled = orders.filter((order) => order.state === OrderState.CANCELLED).length;
 
     const embed: DiscordEmbed = {
         title: `Détails de la commande ${orderId}`,
         description:
             `**Date de la commande :** ${new Date(orderData.date).toLocaleDateString('fr-FR')}\n` +
             `**Montant total :** ${orderData.amount.total / 100} €\n` +
-            `**Statut :** ${nbOrderProcessed} ticket(s) traité(s) / ${nbOrderPending} ticket(s) en attente\n` +
+            `**Statut :** ` +
+            `${nbOrderProcessed > 0 ? `${nbOrderProcessed} ticket(s) traité(s)` : ''}` +
+            `${
+                nbOrderPending > 0 ? `${nbOrderProcessed > 0 ? ' / ' : ''}${nbOrderPending} ticket(s) en attente` : ''
+            }` +
+            `${
+                nbOrderCancelled > 0
+                    ? `${
+                          nbOrderProcessed > 0 || nbOrderPending > 0 ? ' / ' : ''
+                      }${nbOrderCancelled} ticket(s) annulé(s)`
+                    : ''
+            }\n` +
             `**Nom :** ${orderData.payer.firstName} ${orderData.payer.lastName}\n` +
             `**Email :** ${orderData.payer.email}\n` +
             `**Achats :**\n` +
@@ -813,74 +835,63 @@ export async function button_handler(body: DiscordInteraction): Promise<APIGatew
             await editResponse(body, response);
         }
     } else if (custom_id.startsWith('mark_order_processed=')) {
-        await deferResponse(body, false);
         const orderId = custom_id.split('=')[1];
-        // Check if the order exists
-        if (!fetchIssueExists(orderId)) {
-            return await editResponse(body, {
-                content: `La commande ${orderId} n'existe pas.`,
-            });
-        }
-        await resolveIssue(orderId);
-        await validateOrders(orderId);
-        const embed: DiscordEmbed = {
-            title: `Commande ${orderId} traitée`,
-            description: `La commande ${orderId} a été marquée comme traitée par <@${body.member?.user.id}>.`,
-            color: 3066993, // Green color
-            fields: [
-                {
-                    name: 'Statut',
-                    value: 'Traitée',
-                    inline: true,
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                type: DiscordInteractionResponseType.Modal,
+                data: {
+                    title: `Confirmer le traitement de la commande ?`,
+                    custom_id: `confirm_mark_order_processed=${orderId}`,
+                    components: [
+                        {
+                            type: DiscordComponentType.ActionRow,
+                            components: [
+                                {
+                                    type: DiscordComponentType.StringInput,
+                                    custom_id: 'CONFIRMER',
+                                    label: 'Écrivez "CONFIRMER" pour valider',
+                                    style: 1,
+                                    min_length: 9,
+                                    max_length: 9,
+                                    placeholder: 'CONFIRMER',
+                                    required: true,
+                                },
+                            ],
+                        },
+                    ],
                 },
-                {
-                    name: 'Date de traitement',
-                    value: new Date().toLocaleDateString('fr-FR', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                    }),
-                    inline: true,
-                },
-            ],
+            }),
         };
-        return await editResponse(body, {
-            embeds: [embed],
-        });
     } else if (custom_id.startsWith('mark_issue_processed=')) {
-        await deferResponse(body, false);
-        const orderId = custom_id.split('=')[1];
-        // Check if the issue exists
-        if (!fetchIssueExists(orderId)) {
-            return await editResponse(body, {
-                content: `La commande ${orderId} n'existe pas.`,
-            });
-        }
-        await resolveIssue(orderId);
-        const embed: DiscordEmbed = {
-            title: `Problème ${orderId} traité`,
-            description: `Le problème ${orderId} a été marqué comme traité par <@${body.member?.user.id}>.`,
-            color: 3066993, // Green color
-            fields: [
-                {
-                    name: 'Statut',
-                    value: 'Traitée',
-                    inline: true,
+        const issueId = custom_id.split('=')[1];
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                type: DiscordInteractionResponseType.Modal,
+                data: {
+                    title: `Confirmer le traitement du problème ?`,
+                    custom_id: `confirm_mark_issue_processed=${issueId}`,
+                    components: [
+                        {
+                            type: DiscordComponentType.ActionRow,
+                            components: [
+                                {
+                                    type: DiscordComponentType.StringInput,
+                                    custom_id: 'CONFIRMER',
+                                    label: 'Écrivez "CONFIRMER" pour valider',
+                                    style: 1,
+                                    min_length: 9,
+                                    max_length: 9,
+                                    placeholder: 'CONFIRMER',
+                                    required: true,
+                                },
+                            ],
+                        },
+                    ],
                 },
-                {
-                    name: 'Date de traitement',
-                    value: new Date().toLocaleDateString('fr-FR', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                    }),
-                    inline: true,
-                },
-            ],
+            }),
         };
-        return await editResponse(body, {
-            embeds: [embed],
-        });
     } else if (custom_id.startsWith('view_tickets=')) {
         await deferResponse(body, true);
         const orderId = custom_id.split('=')[1];
@@ -1001,6 +1012,131 @@ export async function button_handler(body: DiscordInteraction): Promise<APIGatew
 
         // call discord api to edit old message with new issues
         return await editResponse(body, update);
+    } else if (custom_id.startsWith('cancel_order=')) {
+        const orderId = custom_id.split('=')[1];
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                type: DiscordInteractionResponseType.Modal,
+                data: {
+                    title: `Confirmer l'annulation de la commande ${orderId} ?`,
+                    custom_id: `confirm_cancel_order=${orderId}`,
+                    components: [
+                        {
+                            type: DiscordComponentType.ActionRow,
+                            components: [
+                                {
+                                    type: DiscordComponentType.StringInput,
+                                    custom_id: 'CONFIRMER',
+                                    label: 'Écrivez "CONFIRMER" pour valider',
+                                    style: 1,
+                                    min_length: 9,
+                                    max_length: 9,
+                                    placeholder: 'CONFIRMER',
+                                    required: true,
+                                },
+                            ],
+                        },
+                    ],
+                },
+            }),
+        };
+    } else if (custom_id.startsWith('fetch_tickets=')) {
+        const orderId = custom_id.split('=')[1];
+        await deferResponse(body, true);
+
+        if (await fetchOrderExists(orderId.toString())) {
+            return await editResponse(body, {
+                content: `Les tickets pour la commande ${orderId} ont déjà été attribués.`,
+            });
+        }
+
+        const issue = await getIssue(orderId).catch((err) => {
+            console.error(`Error fetching issue details for issue ${orderId}:`, err);
+            return null;
+        });
+
+        if (!issue) {
+            return await editResponse(body, {
+                content: `Aucune issue trouvée pour la commande ${orderId}.`,
+            });
+        }
+
+        const orderData = issue.order;
+        if (!orderData) {
+            return await editResponse(body, {
+                content: `Aucune commande trouvée pour l'issue ${orderId}.`,
+            });
+        }
+
+        const orderItems = orderData.items;
+        if (!orderItems || orderItems.length === 0) {
+            return await editResponse(body, {
+                content: `Aucun article trouvé pour la commande ${orderId}.`,
+            });
+        } else if (orderItems.length > 10) {
+            return await editResponse(body, {
+                content: `La commande ${orderId} contient trop d'articles (${orderItems.length}). Veuillez annuler la commande et en créer une nouvelle.`,
+            });
+        }
+
+        const tickets = await getUnsoldTickets(orderItems.length).catch((err) => {
+            console.error('Error fetching unsold tickets:', err);
+            return [];
+        });
+
+        if (!tickets || tickets.length < orderItems.length) {
+            return await editResponse(body, {
+                content: `Pas assez de tickets disponibles pour la commande ${orderId}. Veuillez contacter l'administrateur.`,
+            });
+        }
+
+        // Get tickets from S3
+        // Get file from s3
+        const ticketFiles = await Promise.all(
+            tickets.map(
+                async (ticket) =>
+                    await getFile(ticket.url).catch((err) => {
+                        console.error(`Error fetching ticket file for ${ticket.url}:`, err);
+                        return null;
+                    }),
+            ),
+        );
+
+        if (ticketFiles.some((file) => file === null)) {
+            return await editResponse(body, {
+                content: `Erreur lors de la récupération des fichiers de tickets pour la commande ${orderId}.`,
+            });
+        }
+
+        // Assign tickets to order items
+        for (const ticket of tickets) {
+            // update ticket in db
+            await putOrder(orderId.toString(), ticket.id);
+        }
+
+        await updateIssue(orderId.toString(), {
+            flags: FLAG_BUTTON_VIEW_ORDER_DETAILS + FLAG_BUTTON_VIEW_TICKETS + FLAG_BUTTON_MARK_ORDER_PROCESSED,
+        });
+
+        // Return the tickets as a response
+        const ticketFilesEntries = ticketFiles.map((file, index) => ({
+            filename: `ticket_${index + 1}.pdf`,
+            file: file!,
+        }));
+
+        return await editResponseWithFiles(
+            body,
+            {
+                content: `Tickets pour la commande ${orderId} :`,
+                attachments: ticketFiles.map((file, index) => ({
+                    filename: `ticket_${index + 1}.pdf`,
+                    id: index.toString(),
+                    description: `Ticket ${index + 1}`,
+                })),
+            } as DiscordMessagePost,
+            ticketFilesEntries,
+        );
     } else if (custom_id === 'export_orders') {
         const res = export_orders_handler();
 
@@ -1206,5 +1342,140 @@ export async function modal_handler(body: DiscordInteraction): Promise<APIGatewa
                 content: `Une erreur s'est produite lors de l'export des commandes : ${err.message || err}`,
             });
         }
+    } else if (custom_id.startsWith('confirm_mark_issue_processed=')) {
+        await deferResponse(body, false);
+        const issueId = custom_id.split('=')[1];
+
+        if (!fetchIssueExists(issueId)) {
+            return await editResponse(body, {
+                content: `La commande ${issueId} n'existe pas.`,
+            });
+        }
+        const orders = await getOrders(issueId);
+        if (orders && orders.length !== 0) {
+            return await editResponse(body, {
+                content: `Le problème ${issueId} est associé à des commandes. Veuillez marquer les commandes comme traitées avant de marquer le problème comme traité.`,
+            });
+        }
+        await resolveIssue(issueId);
+        const embed: DiscordEmbed = {
+            title: `Problème ${issueId} traité`,
+            description: `Le problème ${issueId} a été marqué comme traité par <@${body.member?.user.id}>.`,
+            color: 3066993,
+            fields: [
+                {
+                    name: 'Statut',
+                    value: 'Traitée',
+                    inline: true,
+                },
+                {
+                    name: 'Date de traitement',
+                    value: new Date().toLocaleDateString('fr-FR', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                    }),
+                    inline: true,
+                },
+            ],
+        };
+        return await editResponse(body, {
+            embeds: [embed],
+        });
+    } else if (custom_id.startsWith('confirm_mark_order_processed=')) {
+        await deferResponse(body, false);
+        const orderId = custom_id.split('=')[1];
+        if (!fetchIssueExists(orderId)) {
+            return await editResponse(body, {
+                content: `La commande ${orderId} n'existe pas.`,
+            });
+        }
+        const orders = await getOrders(orderId);
+        if (!orders || orders.length === 0) {
+            return await editResponse(body, {
+                content: `La commande ${orderId} n'est associée à aucun ticket. Veuillez associer un/des ticket(s) à cette commande avant de la marquer comme traitée.`,
+            });
+        }
+        await resolveIssue(orderId);
+        await validateOrders(orderId);
+        const embed: DiscordEmbed = {
+            title: `Commande ${orderId} traitée`,
+            description: `La commande ${orderId} a été marquée comme traitée par <@${body.member?.user.id}>.`,
+            color: 3066993,
+            fields: [
+                {
+                    name: 'Statut',
+                    value: 'Traitée',
+                    inline: true,
+                },
+                {
+                    name: 'Date de traitement',
+                    value: new Date().toLocaleDateString('fr-FR', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                    }),
+                    inline: true,
+                },
+            ],
+        };
+        return await editResponse(body, {
+            embeds: [embed],
+        });
+    } else if (custom_id.startsWith('confirm_cancel_order=')) {
+        await deferResponse(body, false);
+        const orderId = custom_id.split('=')[1];
+        if (!fetchIssueExists(orderId)) {
+            return await editResponse(body, {
+                content: `La commande ${orderId} n'existe pas.`,
+            });
+        }
+        const orders = await getOrders(orderId);
+        if (orders && orders.length !== 0) {
+            return await editResponse(body, {
+                content: `La commande ${orderId} est associée à un ou plusieurs tickets. Veuillez annuler les tickets associés avant d'annuler la commande.`,
+            });
+        }
+        const { HELLO_ASSO_CLIENT_ID, HELLO_ASSO_CLIENT_SECRET } = await getSecret(HELLO_ASSO_SECRET_PATH);
+        return await cancelPaiementOfOrder(orderId, HELLO_ASSO_CLIENT_ID, HELLO_ASSO_CLIENT_SECRET).then(
+            async () => {
+                await updateIssue(orderId, {
+                    status: IssueStatus.CLOSED,
+                    description: `La commande ${orderId} a été annulée par <@${body.member?.user.id}>.`,
+                });
+                const embed: DiscordEmbed = {
+                    title: `Commande ${orderId} annulée`,
+                    description: `La commande ${orderId} a été annulée par <@${body.member?.user.id}>.`,
+                    color: 16753920, // light orange ,
+                    fields: [
+                        {
+                            name: 'Statut',
+                            value: 'Annulée',
+                            inline: true,
+                        },
+                        {
+                            name: "Date d'annulation",
+                            value: new Date().toLocaleDateString('fr-FR', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                            }),
+                            inline: true,
+                        },
+                    ],
+                };
+                return await editResponse(body, {
+                    embeds: [embed],
+                });
+            },
+            (err: any) => {
+                console.error(`Error canceling order ${orderId}:`, err);
+                return editResponse(body, {
+                    content: `Une erreur s'est produite lors de l'annulation de la commande ${orderId} : ${
+                        err.message || err
+                    }`,
+                });
+            },
+        );
     }
 }

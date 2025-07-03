@@ -19,6 +19,8 @@ import {
     FLAG_BUTTON_VIEW_TICKETS,
     FLAG_BUTTON_MARK_ORDER_PROCESSED,
     BUTTON_MARK_ORDER_PROCESSED,
+    BUTTON_FETCH_TICKETS,
+    FLAG_BUTTON_FETCH_TICKETS,
 } from 'commons/discord.components';
 
 const DISCORD_SECRET_PATH = 'Efrei-Sport-Climbing-App/secrets/discord_bot_token';
@@ -141,11 +143,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                             `Order ${orderData.id} has more than 10 items, not processing.`,
                             DISCORD_LOG_CHANNEL_ID,
                             DISCORD_BOT_TOKEN,
-                            [
-                                BUTTON_VIEW_ORDER_DETAILS(orderData.id),
-                                BUTTON_CANCEL_ORDER(orderData.id),
-                                BUTTON_MARK_ISSUE_PROCESSED(orderData.id),
-                            ],
+                            [BUTTON_VIEW_ORDER_DETAILS(orderData.id), BUTTON_CANCEL_ORDER(orderData.id)],
                         );
                         await putIssue({
                             id: order.id.toString(),
@@ -154,10 +152,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                             createdAt: new Date(),
                             updatedAt: null,
                             order: orderData,
-                            flags:
-                                FLAG_BUTTON_VIEW_ORDER_DETAILS +
-                                FLAG_BUTTON_CANCEL_ORDER +
-                                FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                            flags: FLAG_BUTTON_VIEW_ORDER_DETAILS + FLAG_BUTTON_CANCEL_ORDER,
                         });
                         return ERROR_RESPONSE;
                     }
@@ -179,7 +174,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                             [
                                 BUTTON_VIEW_ORDER_DETAILS(order.id),
                                 BUTTON_CANCEL_ORDER(order.id),
-                                BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                                BUTTON_FETCH_TICKETS(order.id),
                             ],
                         );
                         await putIssue({
@@ -190,9 +185,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                             updatedAt: null,
                             order: orderData,
                             flags:
-                                FLAG_BUTTON_VIEW_ORDER_DETAILS +
-                                FLAG_BUTTON_CANCEL_ORDER +
-                                FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                                FLAG_BUTTON_VIEW_ORDER_DETAILS + FLAG_BUTTON_CANCEL_ORDER + FLAG_BUTTON_FETCH_TICKETS,
                         });
                         return ERROR_RESPONSE;
                     }
@@ -218,7 +211,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                                 [
                                     BUTTON_VIEW_ORDER_DETAILS(order.id),
                                     BUTTON_CANCEL_ORDER(order.id),
-                                    BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                                    BUTTON_FETCH_TICKETS(order.id),
                                 ],
                             );
                             await putIssue({
@@ -230,7 +223,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                                 order: orderData,
                                 flags:
                                     FLAG_BUTTON_VIEW_ORDER_DETAILS +
-                                    FLAG_BUTTON_MARK_ISSUE_PROCESSED +
+                                    FLAG_BUTTON_FETCH_TICKETS +
                                     FLAG_BUTTON_CANCEL_ORDER,
                             });
                             return ERROR_RESPONSE;
@@ -257,7 +250,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                             [
                                 BUTTON_VIEW_ORDER_DETAILS(order.id),
                                 BUTTON_CANCEL_ORDER(order.id),
-                                BUTTON_MARK_ISSUE_PROCESSED(order.id),
+                                BUTTON_FETCH_TICKETS(order.id),
                             ],
                         );
                         await putIssue({
@@ -270,9 +263,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                             updatedAt: null,
                             order: orderData,
                             flags:
-                                FLAG_BUTTON_VIEW_ORDER_DETAILS +
-                                FLAG_BUTTON_CANCEL_ORDER +
-                                FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                                FLAG_BUTTON_VIEW_ORDER_DETAILS + FLAG_BUTTON_CANCEL_ORDER + FLAG_BUTTON_FETCH_TICKETS,
                         });
                         return ERROR_RESPONSE;
                     }
@@ -306,7 +297,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                                 `Error fetching ticket files for order **${order.id}** for user **${discordUserId}**`,
                                 DISCORD_LOG_CHANNEL_ID,
                                 DISCORD_BOT_TOKEN,
-                                [BUTTON_VIEW_ORDER_DETAILS(order.id), BUTTON_MARK_ISSUE_PROCESSED(order.id)],
+                                [
+                                    BUTTON_VIEW_ORDER_DETAILS(order.id),
+                                    BUTTON_CANCEL_ORDER(order.id),
+                                    BUTTON_FETCH_TICKETS(order.id),
+                                ],
                             );
                             await putIssue({
                                 id: order.id.toString(),
@@ -315,7 +310,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                                 createdAt: new Date(),
                                 updatedAt: null,
                                 order: orderData,
-                                flags: FLAG_BUTTON_VIEW_ORDER_DETAILS + FLAG_BUTTON_MARK_ISSUE_PROCESSED,
+                                flags:
+                                    FLAG_BUTTON_VIEW_ORDER_DETAILS +
+                                    FLAG_BUTTON_FETCH_TICKETS +
+                                    FLAG_BUTTON_CANCEL_ORDER,
                             });
                             continue; // Skip to the next user if there's an error fetching ticket files
                         }

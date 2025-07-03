@@ -39,3 +39,11 @@ export const BUTTON_MARK_ORDER_PROCESSED: (orderId: string | number) => DiscordB
     custom_id: "mark_order_processed=" + orderId,
 });
 export const FLAG_BUTTON_MARK_ORDER_PROCESSED = 0b00010000;
+
+export const BUTTON_FETCH_TICKETS: (orderId: string | number) => DiscordButton = (orderId) => ({
+    type: DiscordComponentType.Button,
+    style: DiscordButtonStyle.Success,
+    label: "Fetch Tickets",
+    custom_id: "fetch_tickets=" + orderId,
+});
+export const FLAG_BUTTON_FETCH_TICKETS = 0b00100000;

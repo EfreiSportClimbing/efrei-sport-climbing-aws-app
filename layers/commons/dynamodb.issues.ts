@@ -106,6 +106,7 @@ export async function putIssue(issue: Issue): Promise<void> {
 export async function updateIssue(orderId: string, updates: Partial<Issue>): Promise<void> {
     const updateExpression = [];
     const expressionAttributeValues: Record<string, any> = {};
+    const expressionAttributeNames: Record<string, string> = {};
 
     if (updates.description) {
         updateExpression.push("description = :description");
@@ -114,6 +115,7 @@ export async function updateIssue(orderId: string, updates: Partial<Issue>): Pro
     if (updates.status) {
         updateExpression.push("#status = :status");
         expressionAttributeValues[":status"] = { S: updates.status };
+        expressionAttributeNames["#status"] = "status";
     }
     if (updates.updatedAt) {
         updateExpression.push("updatedAt = :updatedAt");
@@ -122,6 +124,10 @@ export async function updateIssue(orderId: string, updates: Partial<Issue>): Pro
     if (updates.order) {
         updateExpression.push("order = :order");
         expressionAttributeValues[":order"] = { S: JSON.stringify(updates.order) };
+    }
+    if (updates.flags) {
+        updateExpression.push("flags = :flags");
+        expressionAttributeValues[":flags"] = { N: updates.flags.toString() };
     }
 
     if (updateExpression.length === 0) {
@@ -133,9 +139,7 @@ export async function updateIssue(orderId: string, updates: Partial<Issue>): Pro
             TableName: "Efrei-Sport-Climbing-App.issues",
             Key: { orderId: { S: orderId } },
             UpdateExpression: `SET ${updateExpression.join(", ")}`,
-            ExpressionAttributeNames: {
-                "#status": "status",
-            },
+            ExpressionAttributeNames: Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined,
             ExpressionAttributeValues: expressionAttributeValues,
         })
     );

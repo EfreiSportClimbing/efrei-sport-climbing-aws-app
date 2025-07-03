@@ -1,6 +1,6 @@
 import axios from "axios";
 import url from "url";
-import { Order } from "./helloasso.types";
+import { Order, PaymentState } from "./helloasso.types";
 
 let accessToken: string | null = null;
 
@@ -35,4 +35,33 @@ export async function getOrderDetails(orderId: string, clientId: string, clientS
         .catch((error: Error) => {
             throw error;
         });
+}
+
+export async function cancelPaiementOfOrder(orderId: string, clientId: string, clientSecret: string): Promise<void> {
+    const token = await getAccessToken(clientId, clientSecret);
+    // get the associated payment and refund it
+    const orderDetails = await getOrderDetails(orderId, clientId, clientSecret).catch((error: Error) => {
+        throw new Error(`Failed to get order details for order ${orderId}: ${error.message}`);
+    });
+    if (!orderDetails.payments || !orderDetails.payments[0].id) {
+        throw new Error(`No payment found for order ${orderId}`);
+    }
+    const payments = orderDetails.payments.filter((p) => p.state === PaymentState.Authorized || p.state === PaymentState.Registered);
+    if (payments.length === 0) {
+        throw new Error(`No authorized or registered payment found for order ${orderId}`);
+    }
+    // Refund every payment associated with the order
+    for (const payment of payments) {
+        await axios
+            .post(
+                `https://api.helloasso-sandbox.com/v5/payments/${payment.id}/refund`,
+                {},
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                }
+            )
+            .catch((error: Error) => {
+                throw new Error(`Failed to refund payment ${payment.id} for order ${orderId}: ${error.message}`);
+            });
+    }
 }

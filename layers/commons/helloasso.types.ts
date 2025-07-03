@@ -107,8 +107,8 @@ export type Event = {
 
 export type Order = {
     payer: Payer;
-    items: [OrderItem];
-    payments: [OrderPayment];
+    items: OrderItem[];
+    payments: OrderPayment[];
     amount: Amount;
     id: number;
     date: Date;
@@ -123,8 +123,8 @@ export type Order = {
 
 export type OrderDetail = {
     payer: Payer;
-    items: [OrderItem];
-    payments: [OrderPayment];
+    items: OrderItem[];
+    payments: OrderPayment[];
     amount: Amount;
     id: number;
     date: Date;
