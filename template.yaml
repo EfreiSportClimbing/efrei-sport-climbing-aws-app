@@ -29,24 +29,24 @@ Resources:
             Method: post
       Environment:
         Variables:
-          DISCORD_APP_ID: '1372127887096025181'
-          PUBLIC_KEY: '8605d1e852a3a665e53ce2cacced91e87a237a621855adfdbf69aeaba2ac4a65'
-          DISCORD_ROLE_ID: '1372130966935572500'
-          DISCORD_ROLE_ADMIN_ID: '1372131016591933551'
-          GUILD_ID: '1371519432190333059'
-          ANTREBLOC_CHANNEL: '1371521997594689547'
-          CLIMBUP_CHANNEL: '1371522019254075412'
-          CLIMBUP_BORDEAUX_CHANNEL: '1371522048303562872'
-          ARKOSE_CHANNEL: '1371522097628844156'
-          VERTICAL_ART_CHANNEL: '1371522028951175289'
+          DISCORD_APP_ID: '1071807223044513822'
+          PUBLIC_KEY: 'f89f9764c9ce8ce28b688306bf9c996a686ce1de04e804091d52d602016fc77a'
+          DISCORD_ROLE_ID: '752444499795640360'
+          DISCORD_ROLE_ADMIN_ID: '714392325673189416'
+          GUILD_ID: '714391758926118962'
+          ANTREBLOC_CHANNEL: '955472985735721010'
+          CLIMBUP_CHANNEL: '955473017746628628'
+          CLIMBUP_BORDEAUX_CHANNEL: '1022523538986508360'
+          ARKOSE_CHANNEL: '955473048444756048'
+          VERTICAL_ART_CHANNEL: '955473088005431396'
       Policies:
         - AmazonDynamoDBFullAccess
         - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/discord_bot_token-zxJaiq
+            SecretArn: !Ref DiscordBotTokenSecret
         - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/helloasso_client_secret-6EH5xx
+            SecretArn: !Ref HelloAssoClientSecret
         - S3ReadPolicy:
-            BucketName: efrei-sport-climbing-app-test-data
+            BucketName: efrei-sport-climbing-app-data
       Layers:
         - !Ref LayerCommons
     Metadata:
@@ -78,16 +78,16 @@ Resources:
             Enabled: true
       Environment:
         Variables:
-          PUBLIC_KEY: 8605d1e852a3a665e53ce2cacced91e87a237a621855adfdbf69aeaba2ac4a65
-          ANTREBLOC_CHANNEL: '1371521997594689547'
-          CLIMBUP_CHANNEL: '1371522019254075412'
-          CLIMBUP_BORDEAUX_CHANNEL: '1371522048303562872'
-          ARKOSE_CHANNEL: '1371522097628844156'
-          VERTICAL_ART_CHANNEL: '1371522028951175289'
+          PUBLIC_KEY: f89f9764c9ce8ce28b688306bf9c996a686ce1de04e804091d52d602016fc77a
+          ANTREBLOC_CHANNEL: '955472985735721010'
+          CLIMBUP_CHANNEL: '955473017746628628'
+          CLIMBUP_BORDEAUX_CHANNEL: '1022523538986508360'
+          ARKOSE_CHANNEL: '955473048444756048'
+          VERTICAL_ART_CHANNEL: '955473088005431396'
       Policies:
         - AmazonDynamoDBFullAccess
         - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/discord_bot_token-zxJaiq
+            SecretArn: !Ref DiscordBotTokenSecret
       Layers:
         - !Ref LayerCommons
     Metadata:
@@ -118,16 +118,16 @@ Resources:
             Method: post
       Environment:
         Variables:
-          DISCORD_ROLE_ID: '1372130966935572500'
-          GUILD_ID: '1371519432190333059'
+          DISCORD_ROLE_ID: '752444499795640360'
+          GUILD_ID: '714391758926118962'
       Policies:
         - AmazonDynamoDBFullAccess
         - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/discord_bot_token-zxJaiq
+            SecretArn: !Ref DiscordBotTokenSecret
         - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Sub arn:aws:secretsmanager:eu-west-3:069545802036:secret:Efrei-Sport-Climbing-App/secrets/helloasso_client_secret-6EH5xx
+            SecretArn: !Ref HelloAssoClientSecret
         - S3ReadPolicy:
-            BucketName: efrei-sport-climbing-app-test-data
+            BucketName: efrei-sport-climbing-app-data
       Layers:
         - !Ref LayerCommons
     Metadata:
@@ -165,7 +165,7 @@ Resources:
       Policies:
         - AmazonDynamoDBFullAccess
         - S3ReadPolicy:
-            BucketName: efrei-sport-climbing-app-test-data
+            BucketName: efrei-sport-climbing-app-data
       Layers:
         - !Ref LayerCommons
     Metadata:
@@ -244,7 +244,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     Properties:
-      BucketName: efrei-sport-climbing-app-test-data
+      BucketName: efrei-sport-climbing-app-data
   DiscordBotTokenSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -324,3 +324,9 @@ Outputs:
   Sessions:
     Description: Table for sessions of the bot
     Value: !Ref SessionsTable
+  Tickets:
+    Description: Table for tickets of the association
+    Value: !Ref TicketsTable
+  Issues:
+    Description: Table for issues of the association
+    Value: !Ref IssuesTable

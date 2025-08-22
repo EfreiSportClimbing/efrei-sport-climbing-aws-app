@@ -95,7 +95,6 @@ const generateDate = (day: string, hour: string) => {
     const daytoset = DAYS.indexOf(day);
     const currentDay = date.getDay();
     const distance = (daytoset + 7 - currentDay) % 7;
-    console.log(distance, day, daytoset, currentDay);
     date.setDate(date.getDate() + distance);
 
     hour = hour.split('h')[0];

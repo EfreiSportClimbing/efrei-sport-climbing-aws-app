@@ -7,7 +7,7 @@ const client = new S3Client({ region: 'eu-west-3' });
 export async function getFile(path: string): Promise<Blob> {
     // get file from s3
     const data = (await client.send(
-        new GetObjectCommand({ Bucket: 'efrei-sport-climbing-app-test-data', Key: path }),
+        new GetObjectCommand({ Bucket: 'efrei-sport-climbing-app-data', Key: path }),
     )) as GetObjectOutput;
     if (!data.Body) {
         throw new Error('Image not found');
@@ -20,7 +20,7 @@ export async function getFile(path: string): Promise<Blob> {
 export async function updateFile(path: string, file: string): Promise<void> {
     await client.send(
         new PutObjectCommand({
-            Bucket: 'efrei-sport-climbing-app-test-data',
+            Bucket: 'efrei-sport-climbing-app-data',
             Key: path,
             Body: file,
         }),
