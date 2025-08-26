@@ -2,6 +2,8 @@ import axios from "axios";
 import url from "url";
 import { Order, PaymentState } from "./helloasso.types";
 
+const HELLO_ASSO_API_URL = "https://api.helloasso.com";
+
 let accessToken: string | null = null;
 
 export async function getAccessToken(clientId: string, clientSecret: string) {
@@ -13,7 +15,7 @@ export async function getAccessToken(clientId: string, clientSecret: string) {
     body.append("client_secret", clientSecret);
     body.append("grant_type", "client_credentials");
     return await axios
-        .post(`https://api.helloasso-sandbox.com/oauth2/token`, body, {
+        .post(`${HELLO_ASSO_API_URL}/oauth2/token`, body, {
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
         })
         .then((response: any) => {
@@ -28,7 +30,7 @@ export async function getAccessToken(clientId: string, clientSecret: string) {
 export async function getOrderDetails(orderId: string, clientId: string, clientSecret: string): Promise<Order> {
     const token = await getAccessToken(clientId, clientSecret);
     return await axios
-        .get(`https://api.helloasso-sandbox.com/v5/orders/${orderId}`, {
+        .get(`${HELLO_ASSO_API_URL}/orders/${orderId}`, {
             headers: { Authorization: `Bearer ${token}` },
         })
         .then((response: any) => response.data)
@@ -54,7 +56,7 @@ export async function cancelPaiementOfOrder(orderId: string, clientId: string, c
     for (const payment of payments) {
         await axios
             .post(
-                `https://api.helloasso-sandbox.com/v5/payments/${payment.id}/refund`,
+                `${HELLO_ASSO_API_URL}/payments/${payment.id}/refund`,
                 {},
                 {
                     headers: { Authorization: `Bearer ${token}` },

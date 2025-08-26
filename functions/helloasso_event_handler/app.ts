@@ -37,12 +37,12 @@ const ERROR_RESPONSE: APIGatewayProxyResult = {
         message: 'Bad Request to HelloAsso Event Handler',
     }),
 };
-const FORMSLUG = 'antrebloc';
+const FORMSLUG = 'climb-up';
 const FORMTYPE = FormType.Shop;
-const FIELD_DISCORD_USER_ID = 'identifiant helloasso'; // This should match the custom field name in HelloAsso
+const FIELD_DISCORD_USER_ID = 'Identifiant (À obtenir sur le server avec la commande /helloasso)'; // This should match the custom field name in HelloAsso
 
-const HELLO_ASSO_API_URL = 'https://api.helloasso-sandbox.com/v5';
-const DISCORD_LOG_CHANNEL_ID = '1388125927380090966'; // Replace with your Discord log channel ID
+const HELLO_ASSO_API_URL = 'https://api.helloasso.com/v5';
+const DISCORD_LOG_CHANNEL_ID = '1408428754191126588'; // Replace with your Discord log channel ID
 
 /**
  *
@@ -54,8 +54,18 @@ const DISCORD_LOG_CHANNEL_ID = '1388125927380090966'; // Replace with your Disco
  *
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+    // debug log
+    console.log('event', event);
+
     const { DISCORD_BOT_TOKEN } = await getSecret(DISCORD_SECRET_PATH);
     const { HELLO_ASSO_CLIENT_ID, HELLO_ASSO_CLIENT_SECRET } = await getSecret(HELLOASSO_SECRET_PATH);
+    console.log(`HelloAsso Client ID: ${HELLO_ASSO_CLIENT_ID.substring(0, 5)}...${HELLO_ASSO_CLIENT_ID.slice(-5)}`);
+    console.log(
+        `HelloAsso Client Secret: ${HELLO_ASSO_CLIENT_SECRET?.substring(0, 5)}...${HELLO_ASSO_CLIENT_SECRET?.slice(
+            -5,
+        )}`,
+    );
+    console.log(`Discord Bot Token: ${DISCORD_BOT_TOKEN?.substring(0, 5)}...${DISCORD_BOT_TOKEN?.slice(-5)}`);
 
     // get event data of helloasso from event.body
     const { data, eventType } = JSON.parse(event.body || '{}') as Event | { data: null; eventType: null };
@@ -125,6 +135,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
                     if (orderData.formSlug != FORMSLUG || orderData.formType != FORMTYPE) {
                         console.log(`Order ${orderData.id} is not from the expected form slug or type.`);
+                        return DUMMY_RESPONSE;
+                    }
+
+                    // Check if the paiement is authorized
+                    if (orderData.payments?.[0].state !== PaymentState.Authorized) {
+                        console.log(`Order ${orderData.id} payment doesn't correspond to the expected state.`);
                         return DUMMY_RESPONSE;
                     }
 
@@ -508,6 +524,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                     }
 
                     // return ok
+                    return DUMMY_RESPONSE;
+                } else {
+                    console.log(`Order ${order.id} not processed because form slug or type did not match.`);
                     return DUMMY_RESPONSE;
                 }
             }
