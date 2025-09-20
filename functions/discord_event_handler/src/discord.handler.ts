@@ -75,8 +75,6 @@ const CHANNELS: { [key: string]: string } = {
     antrebloc: process.env.ANTREBLOC_CHANNEL as string,
     'climb-up': process.env.CLIMBUP_CHANNEL as string,
     'climb-up-bordeaux': process.env.CLIMBUP_BORDEAUX_CHANNEL as string,
-    arkose: process.env.ARKOSE_CHANNEL as string,
-    'vertical-art': process.env.VERTICAL_ART_CHANNEL as string,
 };
 
 function streamToString(stream: any): Promise<string> {
@@ -122,13 +120,13 @@ async function create_seance(
     const button1: DiscordButton = {
         type: DiscordComponentType.Button,
         style: 1,
-        label: 'Register',
+        label: 'Rejoindre',
         custom_id: 'register',
     };
     const button2: DiscordButton = {
         type: DiscordComponentType.Button,
         style: DiscordButtonStyle.Danger,
-        label: 'Leave',
+        label: 'Se désinscrire',
         custom_id: 'leave',
     };
     const actionRow: DiscordActionRow = {

@@ -14,8 +14,6 @@ const CHANNELS: { [key: string]: string } = {
     antrebloc: process.env.ANTREBLOC_CHANNEL as string,
     'climb-up': process.env.CLIMBUP_CHANNEL as string,
     'climb-up-bordeaux': process.env.CLIMBUP_BORDEAUX_CHANNEL as string,
-    arkose: process.env.ARKOSE_CHANNEL as string,
-    'vertical-art': process.env.VERTICAL_ART_CHANNEL as string,
 };
 
 /**

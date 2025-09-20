@@ -2,7 +2,8 @@ import axios from "axios";
 import url from "url";
 import { Order, PaymentState } from "./helloasso.types";
 
-const HELLO_ASSO_API_URL = "https://api.helloasso.com";
+const HELLO_ASSO_BASE_URL = "https://api.helloasso.com";
+const HELLO_ASSO_API_URL = `${HELLO_ASSO_BASE_URL}/v5`;
 
 let accessToken: string | null = null;
 
@@ -15,7 +16,7 @@ export async function getAccessToken(clientId: string, clientSecret: string) {
     body.append("client_secret", clientSecret);
     body.append("grant_type", "client_credentials");
     return await axios
-        .post(`${HELLO_ASSO_API_URL}/oauth2/token`, body, {
+        .post(`${HELLO_ASSO_BASE_URL}/oauth2/token`, body, {
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
         })
         .then((response: any) => {
