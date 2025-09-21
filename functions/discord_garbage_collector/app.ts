@@ -31,14 +31,30 @@ export const lambdaHandler = async (): Promise<APIGatewayProxyResult> => {
     const { DISCORD_BOT_TOKEN } = await getSecret(SECRET_PATH);
 
     const deleteMessage = async (session: Session) =>
-        await fetch(`https://discord.com/api/v8/channels/${CHANNELS[session.location]}//messages/${session.id}`, {
+        await fetch(`https://discord.com/api/v10/channels/${CHANNELS[session.location]}/messages/${session.id}`, {
             method: 'DELETE',
             headers: {
                 Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
             },
         }).then(async (res) => (res.status == 204 ? await expireSession(session.id) : console.log('error :', res)));
-    const promises = sessions.map((session) => deleteMessage(session));
-    await Promise.all(promises);
+
+    // Process sessions with a true concurrency pool of max 5
+    const CONCURRENCY_LIMIT = 5;
+    const executing = new Set<Promise<void>>();
+
+    for (const session of sessions) {
+        const promise = deleteMessage(session).then(() => {
+            executing.delete(promise);
+        });
+        executing.add(promise);
+
+        if (executing.size >= CONCURRENCY_LIMIT) {
+            await Promise.race(executing);
+        }
+    }
+
+    // Wait for all remaining promises to complete
+    await Promise.all(executing);
 
     return DUMMY_RESPONSE;
 };
