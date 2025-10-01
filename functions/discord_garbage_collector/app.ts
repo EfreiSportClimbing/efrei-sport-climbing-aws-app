@@ -36,18 +36,48 @@ export const lambdaHandler = async (): Promise<APIGatewayProxyResult> => {
             headers: {
                 Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
             },
-        }).then(async (res) => (res.status == 204 ? await expireSession(session.id) : console.log('error :', res)));
+        }).then(async (res) =>
+            res.status == 204 ? await expireSession(session.id) : new Error('Failed to delete message'),
+        );
 
     // Process sessions with a true concurrency pool of max 5
     const CONCURRENCY_LIMIT = 5;
     const executing = new Set<Promise<void>>();
+    const retries: Record<string, number> = {};
 
-    for (const session of sessions) {
-        const promise = deleteMessage(session).then(() => {
-            executing.delete(promise);
-        });
+    while (sessions.length) {
+        const session = sessions.shift(); // Get the next session
+
+        if (!session) break; // Safety check
+
+        const promise = deleteMessage(session)
+            .then(() => {
+                executing.delete(promise);
+                // Timeout a short duration to avoid rate limiting
+                return new Promise((resolve) => setTimeout(resolve, 500)).then(() => {
+                    return;
+                });
+            })
+            .catch((error) => {
+                // Log the error and remove from executing set
+                console.error(`Error deleting message for session ${session.id}:`, error, ' retrying in next run');
+                executing.delete(promise);
+
+                // Track retries
+                if (!retries[session.id]) retries[session.id] = 0;
+                else retries[session.id]++;
+
+                // Retry up to 3 times
+                if (retries[session.id] < 3) {
+                    sessions.push(session); // Re-add the session to the list for retry
+                } else {
+                    console.error(`Max retries reached for session ${session.id}. Giving up.`);
+                }
+            });
+        // Add the promise to the executing set
         executing.add(promise);
 
+        // If we reached the concurrency limit, wait for one to complete
         if (executing.size >= CONCURRENCY_LIMIT) {
             await Promise.race(executing);
         }
