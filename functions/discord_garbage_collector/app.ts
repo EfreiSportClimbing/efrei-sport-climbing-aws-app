@@ -36,9 +36,13 @@ export const lambdaHandler = async (): Promise<APIGatewayProxyResult> => {
             headers: {
                 Authorization: `Bot ${DISCORD_BOT_TOKEN}`,
             },
-        }).then(async (res) =>
-            res.status == 204 ? await expireSession(session.id) : new Error('Failed to delete message'),
-        );
+        }).then(async (res) => {
+            if (res.status === 204) {
+                await expireSession(session.id);
+            } else {
+                throw new Error(`Failed to delete message (status: ${res.status})`);
+            }
+        });
 
     // Process sessions with a true concurrency pool of max 5
     const CONCURRENCY_LIMIT = 5;
