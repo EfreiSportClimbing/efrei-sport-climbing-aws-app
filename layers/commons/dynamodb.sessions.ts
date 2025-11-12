@@ -289,21 +289,27 @@ export async function countSessionsWithUser(idUser: string, from: Date | null = 
             id: { S: Item?.id.S as string },
             sortId: { S: Item?.id.S as string },
         }));
-        const data = await client.send(
-            new BatchGetItemCommand({
-                RequestItems: {
-                    "Efrei-Sport-Climbing-App.sessions": {
-                        Keys: sessionsItems,
-                        ProjectionExpression: "#id, #date",
-                        ExpressionAttributeNames: {
-                            "#id": "id",
-                            "#date": "date",
-                        },
-                    },
-                },
-            })
-        );
-        const sessions = data.Responses?.["Efrei-Sport-Climbing-App.sessions"]?.filter((session: any) => from.getTime() <= parseInt(session.date.N) && parseInt(session.date.N) <= to.getTime());
+        const chunks = (arr: any[], size: number) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
+
+        const data = (
+            await Promise.all(
+                chunks(sessionsItems as any, 100).map((batch) =>
+                    client.send(
+                        new BatchGetItemCommand({
+                            RequestItems: {
+                                "Efrei-Sport-Climbing-App.sessions": {
+                                    Keys: batch,
+                                    ProjectionExpression: "#id, #date",
+                                    ExpressionAttributeNames: { "#id": "id", "#date": "date" },
+                                },
+                            },
+                        })
+                    )
+                )
+            )
+        ).flatMap((res) => res.Responses?.["Efrei-Sport-Climbing-App.sessions"] || []);
+
+        const sessions = data.filter((session: any) => from.getTime() <= parseInt(session.date.N) && parseInt(session.date.N) <= to.getTime());
         return sessions?.length || 0;
     }
     return Count || 0;

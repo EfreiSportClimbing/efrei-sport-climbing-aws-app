@@ -68,15 +68,18 @@ export const lambdaHandler = async (): Promise<APIGatewayProxyResult> => {
                 executing.delete(promise);
 
                 // Track retries
-                if (!retries[session.id]) retries[session.id] = 0;
+                if (!retries[session.id]) retries[session.id] = 1;
                 else retries[session.id]++;
 
                 // Retry up to 3 times
                 if (retries[session.id] < 3) {
+                    console.log('Adding session back to the list for retry:', session.id);
                     sessions.push(session); // Re-add the session to the list for retry
                 } else {
                     console.error(`Max retries reached for session ${session.id}. Giving up.`);
                 }
+
+                return;
             });
         // Add the promise to the executing set
         executing.add(promise);
@@ -84,10 +87,13 @@ export const lambdaHandler = async (): Promise<APIGatewayProxyResult> => {
         // If we reached the concurrency limit, wait for one to complete
         if (executing.size >= CONCURRENCY_LIMIT) {
             await Promise.race(executing);
+        } else if (executing.size >= sessions.length) {
+            // If there are fewer remaining sessions than the concurrency limit, wait for one to complete as well to ensure the while does not exit before a task retries
+            await Promise.race(executing);
         }
     }
 
-    // Wait for all remaining promises to complete
+    // Wait for all remaining promises to complete just in case
     await Promise.all(executing);
 
     return DUMMY_RESPONSE;
