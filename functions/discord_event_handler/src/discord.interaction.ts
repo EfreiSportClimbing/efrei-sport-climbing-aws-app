@@ -21,7 +21,7 @@ import {
     FLAG_BUTTON_VIEW_ORDER_DETAILS,
     FLAG_BUTTON_VIEW_TICKETS,
 } from 'commons/discord.components';
-import { Issue, IssueStatus } from 'commons/dynamodb.types';
+import { IssueStatus } from 'commons/dynamodb.types';
 import { getIssue } from 'commons/dynamodb.issues';
 
 export async function deferResponse(body: DiscordInteraction, ephemeral = false) {

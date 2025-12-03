@@ -12,6 +12,7 @@ import {
 } from "@aws-sdk/client-dynamodb";
 import { Session, User } from "./dynamodb.types";
 import { listUsers } from "./dynamodb.users";
+import { dateToDiscordSnowflake } from "./discord.utils";
 
 const client = new DynamoDBClient({ region: "eu-west-3" });
 
@@ -271,48 +272,53 @@ export async function listSessionUnexpired(): Promise<Session[]> {
 }
 
 export async function countSessionsWithUser(idUser: string, from: Date | null = null, to: Date | null = null): Promise<number> {
+    const fromId = dateToDiscordSnowflake(from || new Date(0));
+    const toId = dateToDiscordSnowflake(to || new Date());
     const params = {
         ExpressionAttributeValues: {
             ":idUser": { S: idUser },
+            ":fromId": { S: fromId },
+            ":toId": { S: toId },
         },
         ExpressionAttributeNames: {
             "#id": "id",
             "#sortId": "sortId",
         },
-        FilterExpression: "#sortId = :idUser",
+        FilterExpression: "#sortId = :idUser AND #id BETWEEN :fromId AND :toId",
         ProjectionExpression: "#id, #sortId",
         TableName: "Efrei-Sport-Climbing-App.sessions",
     };
-    const { Items, Count } = await client.send(new ScanCommand(params));
-    if (from && to && Count) {
-        const sessionsItems = Items?.map((Item) => ({
-            id: { S: Item?.id.S as string },
-            sortId: { S: Item?.id.S as string },
-        }));
-        const chunks = (arr: any[], size: number) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
-
-        const data = (
-            await Promise.all(
-                chunks(sessionsItems as any, 100).map((batch) =>
-                    client.send(
-                        new BatchGetItemCommand({
-                            RequestItems: {
-                                "Efrei-Sport-Climbing-App.sessions": {
-                                    Keys: batch,
-                                    ProjectionExpression: "#id, #date",
-                                    ExpressionAttributeNames: { "#id": "id", "#date": "date" },
-                                },
-                            },
-                        })
-                    )
-                )
-            )
-        ).flatMap((res) => res.Responses?.["Efrei-Sport-Climbing-App.sessions"] || []);
-
-        const sessions = data.filter((session: any) => from.getTime() <= parseInt(session.date.N) && parseInt(session.date.N) <= to.getTime());
-        return sessions?.length || 0;
-    }
+    const { Count } = await client.send(new ScanCommand(params));
     return Count || 0;
+}
+
+export async function countSessionBetweenDatesByUsers(from: Date, to: Date): Promise<{ [key: string]: number }> {
+    const fromId = dateToDiscordSnowflake(from);
+    const toId = dateToDiscordSnowflake(to);
+    const params = {
+        ExpressionAttributeValues: {
+            ":fromId": { S: fromId },
+            ":toId": { S: toId },
+        },
+        ExpressionAttributeNames: {
+            "#id": "id",
+            "#sortId": "sortId",
+        },
+        FilterExpression: "#id BETWEEN :fromId AND :toId",
+        ProjectionExpression: "#sortId",
+        TableName: "Efrei-Sport-Climbing-App.sessions",
+    };
+    const { Items } = await client.send(new ScanCommand(params));
+    const userCountMap: { [key: string]: number } = {};
+    Items?.forEach((item) => {
+        const userId = item.sortId.S as string;
+        if (userCountMap[userId]) {
+            userCountMap[userId]++;
+        } else {
+            userCountMap[userId] = 1;
+        }
+    });
+    return userCountMap;
 }
 
 export async function countParticipants(id: string): Promise<Number> {

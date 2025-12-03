@@ -32,6 +32,41 @@ export async function putTicket(ticketInput: TicketFile): Promise<void> {
     );
 }
 
+export async function deleteTicketByUrl(url: string): Promise<void> {
+    const { Items } = await client.send(
+        new ScanCommand({
+            TableName: "Efrei-Sport-Climbing-App.tickets",
+            FilterExpression: "#url = :url AND sold = :sold",
+            ExpressionAttributeNames: {
+                "#url": "url",
+            },
+            ExpressionAttributeValues: {
+                ":url": { S: url },
+                ":sold": { BOOL: false },
+            },
+        })
+    );
+    if (!Items || Items.length === 0) {
+        throw new Error("Ticket not found");
+    }
+    const ticketId = Items[0].id.S as string;
+    await client.send(
+        new TransactWriteItemsCommand({
+            TransactItems: [
+                {
+                    Delete: {
+                        TableName: "Efrei-Sport-Climbing-App.tickets",
+                        Key: {
+                            id: { S: ticketId },
+                            orderId: { S: ticketId },
+                        },
+                    },
+                },
+            ],
+        })
+    );
+}
+
 export async function listTickets(): Promise<TicketFile[]> {
     const { Items } = await client.send(new ScanCommand({ TableName: "Efrei-Sport-Climbing-App.tickets", FilterExpression: "id = orderId" }));
     if (!Items) {

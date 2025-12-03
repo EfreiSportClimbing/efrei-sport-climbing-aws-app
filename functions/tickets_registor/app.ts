@@ -1,5 +1,5 @@
 import { APIGatewayProxyResult } from 'aws-lambda';
-import { putTicket } from 'commons/dynamodb.tickets';
+import { putTicket, deleteTicketByUrl } from 'commons/dynamodb.tickets';
 
 /**
  *
@@ -20,6 +20,7 @@ export const lambdaHandler = async (event: any, context: any): Promise<APIGatewa
             }),
         };
     }
+
     for (const record of Records) {
         console.log('record', JSON.stringify(record));
         const { s3 } = record;
@@ -40,12 +41,23 @@ export const lambdaHandler = async (event: any, context: any): Promise<APIGatewa
                 }),
             };
         }
-        await putTicket({
-            id: context.awsRequestId,
-            url: object.key,
-            sold: false,
-            date: new Date(),
-        });
+        // Get event type
+        const { eventName } = record;
+        if (eventName.startsWith('ObjectCreated:')) {
+            await putTicket({
+                id: context.awsRequestId,
+                url: object.key,
+                sold: false,
+                date: new Date(),
+            });
+        } else if (eventName.startsWith('ObjectRemoved:')) {
+            // Handle object removal if necessary
+            try {
+                await deleteTicketByUrl(object.key);
+            } catch (error) {
+                console.error('Error deleting ticket by URL:', error);
+            }
+        }
     }
     return {
         statusCode: 200,

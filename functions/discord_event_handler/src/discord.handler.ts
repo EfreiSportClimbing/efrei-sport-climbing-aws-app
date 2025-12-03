@@ -22,6 +22,7 @@ import { getUser, listUsers, putUser } from 'commons/dynamodb.users';
 import {
     addUserToSession,
     countParticipants,
+    countSessionBetweenDatesByUsers,
     countSessionsWithUser,
     deleteSession,
     findSession,
@@ -349,14 +350,15 @@ async function statement_handler(body: DiscordInteraction): Promise<[DiscordMess
 
     const users = await listUsers();
 
-    for (const user of users) {
-        const number = await countSessionsWithUser(user.id as string, from, to);
-        user.nbOfSeances = number;
-    }
+    const sessions: { [key: string]: number } = await countSessionBetweenDatesByUsers(from, to);
 
-    const data = users.map((user) => {
-        return [user.firstName, user.lastName, user.promo, user.nbOfSeances];
-    });
+    const data = users
+        .map((user) => {
+            const nbOfSeances = sessions[user.id as string] || 0;
+            return [user.firstName, user.lastName, user.promo, nbOfSeances];
+        })
+        .filter((user) => (user[3] as number) > 0);
+
     // create csv file with users
     const formatedData = stringify(data, {
         header: true,
@@ -382,12 +384,13 @@ async function statement_handler(body: DiscordInteraction): Promise<[DiscordMess
         '__Voici le bilan des séances de grimpe :__\n\n' +
         users
             .sort((a, b) => (b.nbOfSeances as number) - (a.nbOfSeances as number))
-            .map(
-                (user) =>
-                    `- **${user.firstName} ${user.lastName}** promo *${user.promo}* : **${user.nbOfSeances}** séance${
-                        (user.nbOfSeances as number) > 1 ? 's' : ''
-                    }`,
-            )
+            .filter((user) => (sessions[user.id as string] || 0) > 0)
+            .map((user) => {
+                const nbOfSeances = sessions[user.id as string] || 0;
+                return `- **${user.firstName} ${user.lastName}** promo *${user.promo}* : **${nbOfSeances}** séance${
+                    nbOfSeances > 1 ? 's' : ''
+                }`;
+            })
             .join('\n') +
         `\n\nEntre le **${fromString}** et le **${toString}**.`;
 

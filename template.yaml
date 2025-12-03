@@ -18,7 +18,7 @@ Resources:
       CodeUri: functions/discord_event_handler/
       Handler: app.lambdaHandler
       Runtime: nodejs22.x
-      Timeout: 15
+      Timeout: 10
       Architectures:
         - arm64
       Events:
@@ -152,6 +152,18 @@ Resources:
           Properties:
             Bucket: !Ref EfreiSportClimbingBucket
             Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: tickets/climb-up/
+                  - Name: suffix
+                    Value: pdf
+        S3EventSuppression:
+          Type: S3
+          Properties:
+            Bucket: !Ref EfreiSportClimbingBucket
+            Events: s3:ObjectRemoved:*
             Filter:
               S3Key:
                 Rules:
