@@ -1,0 +1,16 @@
+{
+    "name": "register-commands",
+    "version": "1.0.0",
+    "main": "script/register.js",
+    "type": "module",
+    "scripts": {
+        "register:commands": "node script/register.js"
+    },
+    "dependencies": {
+        "@discordjs/builders": "^1.4.0",
+        "@discordjs/rest": "^1.5.0",
+        "axios": "^1.3.3",
+        "discord-api-types": "^0.37.35",
+        "dotenv": "^16.0.3"
+    }
+}
